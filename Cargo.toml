@@ -2,5 +2,12 @@
 name = "voicekick"
 version = "0.1.0"
 edition = "2021"
+description = """
+Top Level domain static hash map, tld list is obtained from of iana.org
+"""
+homepage = "https://github.com/voicekick/voicekick"
+repository = "https://github.com/voicekick/voicekick"
+license = "BSD-3-Clause"
+documentation = "https://docs.rs/voicekick"
 
 [dependencies]
