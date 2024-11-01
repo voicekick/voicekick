@@ -1,0 +1,14 @@
+[package]
+name = "input-voice"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+windows = ["cpal/asio"]
+linux = ["cpal/jack"]
+
+[dependencies]
+cpal = { version = "0.15", default-features = false, features = [] }
+earshot = "0.1.0"
+rubato = { version = "0.16", default-features = false, features = ["fft_resampler"] }
+voice_activity_detector = "0.1"
