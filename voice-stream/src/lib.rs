@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 // Re-export
 pub use cpal;
 

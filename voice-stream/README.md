@@ -17,15 +17,16 @@ This library provides a high-level interface for capturing audio input, performi
 
 ## Usage
 
-```rust
+```rust,no_run
 use voice_stream::VoiceStream;
+use voice_stream::cpal::traits::StreamTrait;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create a default voice stream with receiver
-    let (voice_stream, receiver) = VoiceStream::default_device()?;
+    let (voice_stream, receiver) = VoiceStream::default_device().unwrap();
 
     // Start capturing audio
-    voice_stream.play()?;
+    voice_stream.play().unwrap();
 
     // Receive voice data chunks
     for voice_data in receiver {
@@ -41,14 +42,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 The library provides a builder pattern for advanced configuration:
 
-```rust
+```rust,no_run
 use voice_stream::{VoiceStreamBuilder, WebRtcVoiceActivityProfile};
+use voice_stream::cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 let (tx, rx) = std::sync::mpsc::channel();
+
+let host = cpal::default_host();
+
+let select_device = "default";
+
+// Set up the input device and stream with the default input config.
+let device = if select_device == "default" {
+    host.default_input_device()
+} else {
+    host.input_devices()
+        .expect("Failed to get input devices")
+        .find(|x| x.name().map(|y| y == select_device).unwrap_or(false))
+}
+.expect("failed to find input device");
+
+let config = device
+    .default_input_config()
+    .expect("Failed to get default input config");
 
 let voice_stream = VoiceStreamBuilder::new(config, device, tx)
     .with_sound_buffer_until_size(1024)
     .with_voice_detection_silero_voice_threshold(0.5)
     .with_voice_detection_webrtc_profile(WebRtcVoiceActivityProfile::AGGRESSIVE)
-    .build()?;
+    .build()
+    .unwrap();
 ```
