@@ -15,26 +15,28 @@ pub struct Resampler {
     channels: usize,
 
     resampler: FastFixedIn<f32>,
-    resampler_buffer: Vec<Vec<f32>>,
     resampler_chunk_size: usize,
+    resample_ratio: f64,
 }
 
 impl Resampler {
     pub fn new(
         input_sample_ratio: f64,
         output_sample_ratio: f64,
-        resampler_chunk_size: usize,
+        chunk_size: Option<usize>,
         channels: usize,
     ) -> VoiceInputResult<Self> {
         // https://github.com/HEnquist/rubato?tab=readme-ov-file#resampling-a-given-audio-clip
         let resample_ratio = output_sample_ratio / input_sample_ratio;
         let max_resample_ratio_relative = 10.0;
 
-        println!(
-            "Resampler new channels {} input_sample_ratio {} output_sample_ratio {} resample_ratio {}",
-            channels,
-            input_sample_ratio, output_sample_ratio, resample_ratio
-        );
+        // println!(
+        //     "Resampler new channels {} input_sample_ratio {} output_sample_ratio {} resample_ratio {}",
+        //     channels,
+        //     input_sample_ratio, output_sample_ratio, resample_ratio
+        // );
+
+        let resampler_chunk_size = chunk_size.unwrap_or(1024);
 
         let resampler = FastFixedIn::<f32>::new(
             resample_ratio,
@@ -46,13 +48,11 @@ impl Resampler {
             channels,
         )?;
 
-        let resampler_buffer = resampler.output_buffer_allocate(true);
-
         Ok(Self {
             channels,
-            resampler_buffer,
             resampler,
             resampler_chunk_size,
+            resample_ratio,
         })
     }
 
@@ -64,6 +64,17 @@ impl Resampler {
     {
         // Convert the incoming audio data to f32
         let input = sample_to_f32(input);
+
+        // No need to resample if the input and output sample rates are the same
+        // and channel is already mono
+        if self.resample_ratio == 1.0 && self.channels == 1 {
+            return input;
+        }
+
+        // assert!(
+        //     input.len() % self.channels == 0,
+        //     "Number of samples must be a multiple of channels"
+        // );
 
         // When there are more than 1 channels in the audio, process the samples in chunks
         // each chunk must be a multiple of the number of channels
@@ -78,16 +89,17 @@ impl Resampler {
         let channels = self.channels;
         let chunk_size = self.resampler_chunk_size;
 
-        let into_mono_samples = |raw_samples: &[f32]| -> Vec<Vec<f32>> {
+        let into_channeled_samples = |raw_samples: &[f32]| -> Vec<Vec<f32>> {
             if channels > 1 {
-                let mut mono_samples = make_buffer(channels, chunk_size, false);
+                let mut channeled_samples = make_buffer(channels, chunk_size, false);
 
-                for (i, sample) in raw_samples.iter().enumerate() {
-                    mono_samples[i % channels].push(*sample);
+                for (i, raw_sample) in raw_samples.iter().enumerate() {
+                    channeled_samples[i % channels].push(*raw_sample);
                 }
 
-                mono_samples
+                channeled_samples
             } else {
+                // 1 channel / mono channel
                 vec![raw_samples.to_vec()]
             }
         };
@@ -95,15 +107,16 @@ impl Resampler {
         let mut output: Vec<f32> = chunks
             // No need to pad samples in both if branches because of chunks_exact guarantee
             .flat_map(|samples| {
-                let samples = into_mono_samples(samples);
+                let samples = into_channeled_samples(samples);
 
                 self.resample_audio(&samples)
             })
             .collect();
 
         if incomplete_chunk.len() > 0 {
-            let samples = into_mono_samples(&incomplete_chunk);
+            let samples = into_channeled_samples(&incomplete_chunk);
 
+            // Padding of the last chunk is handled by the process_partial_into_buffer
             let remainder: Vec<f32> = self.resample_partial_audio(&samples);
 
             output.extend(remainder);
@@ -113,18 +126,12 @@ impl Resampler {
     }
 
     fn resample_partial_audio(&mut self, input: &[Vec<f32>]) -> Vec<f32> {
-        let (_chunk_size, output_length) = self
+        let resampled_samples = self
             .resampler
-            .process_partial_into_buffer(Some(&input), &mut self.resampler_buffer, None)
-            .expect("valid buffer");
+            .process_partial(Some(&input), None)
+            .expect("valid partial buffer");
 
-        // Truncate the output buffer to the actual length of the re-sampled audio
-        // note: slice is used to avoid cloning the entire buffer
-        self.resampler_buffer
-            .iter()
-            .flat_map(|channel| &channel[0..output_length])
-            .cloned()
-            .collect()
+        samples_into_mono_channel(resampled_samples)
     }
 
     // Re-sample the audio from input_sample_rate to output_sample_rate
@@ -133,23 +140,33 @@ impl Resampler {
     // the input phase and how the re-sampling window aligns with the data. This is normal behavior for re-sampling algorithms,
     // especially with non-integer ratios like 48 kHz to 16 kHz.
     fn resample_audio(&mut self, input: &[Vec<f32>]) -> Vec<f32> {
-        let (_chunk_size, output_length) = self
-            .resampler
-            .process_into_buffer(&input, &mut self.resampler_buffer, None)
-            .expect("valid buffer");
+        // Perform resampling on the multi-channel input
+        let resampled_samples = self.resampler.process(input, None).expect("valid buffer");
 
-        // Truncate the output buffer to the actual length of the re-sampled audio
-        // note: slice is used to avoid cloning the entire buffer
-        self.resampler_buffer
-            .iter()
-            .flat_map(|channel| &channel[0..output_length])
-            .cloned()
-            .collect()
+        samples_into_mono_channel(resampled_samples)
     }
+}
+
+fn samples_into_mono_channel(resampled_samples: Vec<Vec<f32>>) -> Vec<f32> {
+    // Convert multi-channel output to mono by averaging across channels
+    let output_length = resampled_samples
+        .first()
+        .map(|channel| channel.len())
+        .unwrap_or(0);
+    // Assume all channels have the same length
+    let mut mono_output = Vec::with_capacity(output_length);
+
+    for i in 0..output_length {
+        let sum: f32 = resampled_samples.iter().map(|channel| channel[i]).sum();
+        mono_output.push(sum / resampled_samples.len() as f32);
+    }
+    mono_output
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_vector_resize_overwrite() {
         let mut input = vec![1.0, 2.0, 3.0, 4.0];
@@ -181,5 +198,29 @@ mod tests {
             input,
             vec![1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 5.0]
         );
+    }
+
+    #[test]
+    fn test_resampler_process_when_resample_ratio_is_one_and_mono_channel() {
+        let mut resampler = Resampler::new(16000.0, 16000.0, Some(512), 1).unwrap();
+
+        let input = vec![1.0, 2.0, 3.0, 4.0];
+
+        let output = resampler.process(&input);
+
+        assert_eq!(input, output);
+    }
+
+    #[test]
+    fn test_resampler_process_when_resample_ratio_is_one_and_two_channels() {
+        let mut resampler = Resampler::new(16000.0, 16000.0, Some(4), 2).unwrap();
+
+        let input = vec![
+            1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0,
+        ];
+
+        let output = resampler.process(&input);
+
+        assert_eq!(output, vec![0.0, 0.0]);
     }
 }

@@ -1,12 +1,20 @@
 // Re-export
 pub use cpal;
 
+// Re-export
+pub use earshot::{
+    VoiceActivityDetector as WebRtcVoiceActivityDetector,
+    VoiceActivityProfile as WebRtcVoiceActivityProfile,
+};
+
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Device, PauseStreamError, PlayStreamError, SampleFormat, StreamConfig, SupportedStreamConfig,
 };
-use earshot::VoiceActivityProfile as WebRtcVoiceActivityProfile;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::{
+    sync::mpsc::{self, Receiver, Sender},
+    time::Duration,
+};
 use traits::IntoF32;
 use voice::{VoiceDetection, SILERO_VAD_VOICE_THRESHOLD};
 
@@ -39,6 +47,12 @@ where
     T: cpal::Sample + IntoF32,
 {
     input.iter().map(|sample| sample.into_f32()).collect()
+}
+
+/// Duration from samples
+pub fn samples_to_duration(samples: usize, sample_rate: Option<f64>) -> Duration {
+    let seconds = samples as f64 / sample_rate.unwrap_or(SAMPLE_RATE as f64);
+    Duration::from_secs_f64(seconds)
 }
 
 /// Voice handler
@@ -104,14 +118,14 @@ pub struct SoundStream {
 }
 
 impl SoundStream {
-    pub fn new(sample_ratio: usize, channels: usize) -> VoiceInputResult<Self> {
-        let outgoing_sample_rate = 16000;
+    pub fn new(incoming_sample_rate: usize, channels: usize) -> VoiceInputResult<Self> {
+        let outgoing_sample_rate = SAMPLE_RATE;
         let chunk_size = 512;
 
         let resampler = Resampler::new(
-            sample_ratio as f64,
+            incoming_sample_rate as f64,
             outgoing_sample_rate as f64,
-            chunk_size,
+            Some(1024),
             channels,
         )?;
 
@@ -134,7 +148,8 @@ impl SoundStream {
     where
         T: cpal::Sample + IntoF32,
     {
-        let samples = self.preprocess_samples(input);
+        // Pre-process the incoming audio samples by converting to f32,
+        let samples = self.resampler.process(&input);
 
         self.buffer.extend(samples);
 
@@ -147,15 +162,6 @@ impl SoundStream {
                 }
             }
         }
-    }
-
-    /// Pre-process the incoming audio samples by converting to f32,
-    /// averaging across channels, and re-sampling to 16 kHz.
-    pub fn preprocess_samples<T>(&mut self, input: &[T]) -> Vec<f32>
-    where
-        T: cpal::Sample + IntoF32,
-    {
-        self.resampler.process(&input)
     }
 }
 

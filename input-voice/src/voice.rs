@@ -6,15 +6,6 @@ use voice_activity_detector::VoiceActivityDetector as SileroVoiceActivityDetecto
 
 use crate::{traits::IntoI16, Resampler, VoiceInputResult, SAMPLE_RATE};
 
-/// 10 ms at a 16 kHz sample rate = 10 * 16000 / 1000 = 160 samples
-pub const CHUNK_SIZE_10MS: usize = 10 * SAMPLE_RATE / 1000;
-
-/// 20 ms at a 16 kHz sample rate = 20 * 16000 / 1000 = 320 samples
-pub const CHUNK_SIZE_20MS: usize = 20 * SAMPLE_RATE / 1000;
-
-/// 30 ms at a 16 kHz sample rate = 30 * 16000 / 1000 = 480 samples
-pub const CHUNK_SIZE_30MS: usize = 30 * SAMPLE_RATE / 1000;
-
 /// Silero VAD requires SAMPLE_RATE / CHUNK_SIZE > 31.25 (16000 / 512 = 31.25)
 pub const SILERO_VAD_CHUNK_SIZE: usize = 512;
 
@@ -22,6 +13,13 @@ pub const SILERO_VAD_CHUNK_SIZE: usize = 512;
 pub const SILERO_VAD_VOICE_THRESHOLD: f32 = 0.1;
 
 const WEBRTC_SAMPLE_RATE: usize = 8000;
+
+// Incoming input of ~341 gets resampled into 512 samples
+// if we were to split samples into 240 chunks we would get ~3 samples
+// by empirically testing that all 3 samples return true as noise
+// sometimes 3 (last sample) returns false as it is padded by 0
+// it's good enough to take just first sample hence .take(240)
+const WEBRTC_CHUNK_SIZE: usize = 240;
 
 pub struct VoiceDetection {
     samples_buffer: Vec<f32>,
@@ -80,12 +78,16 @@ impl VoiceDetection {
             .sample_rate(sample_rate as i64)
             .chunk_size(silero_chunk_size)
             .build()
-            .expect("Valid Silero VAD configuration");
+            .expect("valid Silero VAD configuration");
 
         let webrtc_resampler = Resampler::new(
             sample_rate as f64,
             WEBRTC_SAMPLE_RATE as f64,
-            silero_chunk_size / 2,
+            if sample_rate == WEBRTC_SAMPLE_RATE {
+                Some(silero_chunk_size)
+            } else {
+                Some(silero_chunk_size / 2)
+            },
             channel,
         )?;
 
@@ -173,7 +175,6 @@ impl VoiceDetection {
                 if self.samples_buffer.is_empty() {
                     None
                 } else {
-                    self.samples_buffer.clear();
                     Some(self.samples_buffer.split_off(0))
                 }
             }
@@ -218,13 +219,6 @@ impl VoiceDetection {
     ///
     /// Chunk size: 160, 320, 480
     pub fn webrtc_vad_is_noise(&mut self, input: &[f32]) -> bool {
-        // Incoming input of ~341 gets resampled into 512 samples
-        // if we were to split samples into 240 chunks we would get ~3 samples
-        // by empirically testing that all 3 samples return true as noise
-        // sometimes 3 (last sample) returns false as it is padded by 0
-        // it's good enough to take just first sample hence .take(240)
-        const WEBRTC_CHUNK_SIZE: usize = 240;
-
         let mut samples_8khz: Vec<i16> = if self.sample_rate == WEBRTC_SAMPLE_RATE {
             input.to_vec()
         } else {
@@ -235,10 +229,11 @@ impl VoiceDetection {
         .map(|sample| sample.into_i16())
         .collect();
 
+        // Pad with 0s if the frame is too short
         samples_8khz.resize(WEBRTC_CHUNK_SIZE, 0);
 
         self.webrtc_vad
             .predict_8khz(&samples_8khz)
-            .expect("valid frame size multiplier")
+            .expect("safety: valid frame size multiplier")
     }
 }

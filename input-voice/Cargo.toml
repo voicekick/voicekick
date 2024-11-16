@@ -12,3 +12,7 @@ cpal = { version = "0.15", default-features = false, features = [] }
 earshot = "0.1.0"
 rubato = { version = "0.16", default-features = false, features = ["fft_resampler"] }
 voice_activity_detector = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util"] }
+voice-tests= { path = "../voice-tests" }
