@@ -55,26 +55,109 @@ pub fn samples_to_duration(samples: usize, sample_rate: Option<f64>) -> Duration
     Duration::from_secs_f64(seconds)
 }
 
-/// Voice handler
-pub struct VoiceInputStream {
-    input_stream: Box<dyn StreamTrait>,
+/// Voice input stream builder
+pub struct VoiceInputStreamBuilder {
+    supported_config: SupportedStreamConfig,
+    device: Device,
+    tx: InputSoundSender,
+    sound_stream_samples_buffer_size: usize,
+
+    voice_detection_webrtc_profile: WebRtcVoiceActivityProfile,
+    voice_detection_silero_threshold: f32,
 }
 
-impl TryFrom<(SupportedStreamConfig, Device, InputSoundSender)> for VoiceInputStream {
-    type Error = VoiceInputError;
+impl VoiceInputStreamBuilder {
+    /// Create a new voice input stream builder
+    pub fn new(
+        supported_config: SupportedStreamConfig,
+        device: Device,
+        tx: InputSoundSender,
+    ) -> Self {
+        Self {
+            supported_config,
+            device,
+            tx,
+            sound_stream_samples_buffer_size: 512,
+            voice_detection_webrtc_profile: WebRtcVoiceActivityProfile::VERY_AGGRESSIVE,
+            voice_detection_silero_threshold: SILERO_VAD_VOICE_THRESHOLD,
+        }
+    }
 
-    fn try_from(
-        (config, device, tx): (SupportedStreamConfig, Device, InputSoundSender),
-    ) -> Result<Self, Self::Error> {
-        let input_stream = create_stream(config, device, tx)?;
+    pub fn with_sound_buffer_until_size(mut self, buffer_size: usize) -> Self {
+        match self.supported_config.sample_rate().0 {
+            0..8000 => {
+                unimplemented!("Silero VAD does not support sample rates below 8khz");
+            }
+            8000..16000 => {
+                assert!(
+                    buffer_size >= 256,
+                    "Silero VAD requires buffer size >= 256 at 8khz to 16khz"
+                );
+            }
+            16000.. => {
+                assert!(
+                    buffer_size >= 512,
+                    "Silero VAD requires buffer size >= 512 at 16khz or more"
+                );
+            }
+        }
+
+        self.sound_stream_samples_buffer_size = buffer_size;
+        self
+    }
+
+    pub fn with_voice_detection_silero_voice_threshold(mut self, threshold: f32) -> Self {
+        assert!(
+            threshold >= 0.0 && threshold <= 1.0,
+            "Silero VAD voice threshold must be between 0.0 and 1.0"
+        );
+        self.voice_detection_silero_threshold = threshold;
+
+        self
+    }
+
+    pub fn with_voice_detection_webrtc_profile(
+        mut self,
+        profile: WebRtcVoiceActivityProfile,
+    ) -> Self {
+        self.voice_detection_webrtc_profile = profile;
+        self
+    }
+
+    /// Build a voice input stream
+    pub fn build(self) -> Result<VoiceInputStream, VoiceInputError> {
+        let outgoing_sample_rate = SAMPLE_RATE;
+
+        let voice_detection = VoiceDetection::new(
+            outgoing_sample_rate,
+            self.voice_detection_webrtc_profile,
+            self.sound_stream_samples_buffer_size,
+            self.voice_detection_silero_threshold,
+        )?;
+
+        let sound_stream = SoundStream::new(
+            self.supported_config.sample_rate().0 as usize,
+            outgoing_sample_rate,
+            self.supported_config.channels() as usize,
+            self.sound_stream_samples_buffer_size,
+            voice_detection,
+        )?;
+
+        let input_stream =
+            create_stream(sound_stream, self.supported_config, self.device, self.tx)?;
 
         // Unfortunately, CPAL does not have a built-in mechanism for creating an input stream in a paused state.
         // This is workaround for the limitation of CPAL explicitly calling pause on the stream to ensure
         // it is paused rather than working-around lazy initialization of the stream with locks or w/e.
         let _ = input_stream.pause()?;
 
-        Ok(Self { input_stream })
+        Ok(VoiceInputStream { input_stream })
     }
+}
+
+/// Voice handler
+pub struct VoiceInputStream {
+    input_stream: Box<dyn StreamTrait>,
 }
 
 impl VoiceInputStream {
@@ -93,7 +176,10 @@ impl VoiceInputStream {
 
         let (tx, receiver) = mpsc::channel();
 
-        Ok((Self::try_from((config, device, tx))?, receiver))
+        Ok((
+            VoiceInputStreamBuilder::new(config, device, tx).build()?,
+            receiver,
+        ))
     }
 }
 
@@ -107,10 +193,10 @@ impl StreamTrait for VoiceInputStream {
     }
 }
 
-/// Voice input stream
-pub struct SoundStream {
+/// Sound stream with VAD
+struct SoundStream {
     buffer: Vec<f32>,
-    chunk_size: usize,
+    buffer_size: usize,
 
     resampler: Resampler,
 
@@ -118,10 +204,13 @@ pub struct SoundStream {
 }
 
 impl SoundStream {
-    pub fn new(incoming_sample_rate: usize, channels: usize) -> VoiceInputResult<Self> {
-        let outgoing_sample_rate = SAMPLE_RATE;
-        let chunk_size = 512;
-
+    pub fn new(
+        incoming_sample_rate: usize,
+        outgoing_sample_rate: usize,
+        channels: usize,
+        buffer_size: usize,
+        voice_detection: VoiceDetection,
+    ) -> VoiceInputResult<Self> {
         let resampler = Resampler::new(
             incoming_sample_rate as f64,
             outgoing_sample_rate as f64,
@@ -130,17 +219,11 @@ impl SoundStream {
         )?;
 
         Ok(Self {
-            buffer: Vec::with_capacity(chunk_size),
-            chunk_size,
+            buffer: Vec::with_capacity(buffer_size),
+            buffer_size,
 
             resampler,
-            voice_detection: VoiceDetection::new(
-                outgoing_sample_rate,
-                WebRtcVoiceActivityProfile::VERY_AGGRESSIVE,
-                chunk_size,
-                SILERO_VAD_VOICE_THRESHOLD,
-            )
-            .expect("Valid default"),
+            voice_detection,
         })
     }
 
@@ -153,7 +236,7 @@ impl SoundStream {
 
         self.buffer.extend(samples);
 
-        if self.buffer.len() >= self.chunk_size {
+        if self.buffer.len() >= self.buffer_size {
             let buffer = self.buffer.split_off(0);
 
             if let Some(voice_buffer) = self.voice_detection.add_samples(buffer) {
@@ -166,6 +249,7 @@ impl SoundStream {
 }
 
 fn create_stream(
+    mut sound_stream: SoundStream,
     supported_config: SupportedStreamConfig,
     device: Device,
     sender: InputSoundSender,
@@ -176,11 +260,6 @@ fn create_stream(
     let err_fn = move |err| {
         eprintln!("An error occurred on stream: {}", err);
     };
-
-    let mut sound_stream = SoundStream::new(
-        supported_config.sample_rate().0 as usize,
-        supported_config.channels() as usize,
-    )?;
 
     let stream = match sample_format {
         SampleFormat::I8 => device.build_input_stream(

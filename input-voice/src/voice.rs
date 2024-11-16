@@ -54,20 +54,26 @@ impl VoiceDetection {
     //  - The model is trained using chunk sizes of 256, 512, and 768 samples for an 8000 hz sample rate.
     //  - It is trained using chunk sizes of 512, 768, 1024 samples for a 16,000 hz sample rate. These values are recommended for optimal performance, but are not required. The only requirement imposed by the underlying model is the sample rate must be no larger than 31.25 times the chunk size.
     pub fn new(
-        sample_rate: usize,
+        incoming_sample_rate: usize,
         webrtc_vad_profile: WebRtcVoiceActivityProfile,
         silero_chunk_size: usize,
         silero_vad_voice_threshold: f32,
     ) -> VoiceInputResult<Self> {
-        match sample_rate {
+        match incoming_sample_rate {
             8000 => {
-                assert!(silero_chunk_size >= 256, "silero_chunk_size must be >= 256");
+                assert!(
+                    silero_chunk_size >= 256,
+                    "Sample rate 8000 Hz requires chunk size >= 256"
+                );
             }
             16000 => {
-                assert!(silero_chunk_size >= 512, "silero_chunk_size must be >= 512");
+                assert!(
+                    silero_chunk_size >= 512,
+                    "Sample rate 16000 Hz requires chunk size >= 512"
+                );
             }
             _ => {
-                panic!("incoming_sample_rate must be 8000 or 16000 Hz");
+                panic!("Sample rate must be 8000 or 16000 Hz");
             }
         }
 
@@ -75,15 +81,15 @@ impl VoiceDetection {
         let channel = 1;
 
         let silero_vad = SileroVoiceActivityDetector::builder()
-            .sample_rate(sample_rate as i64)
+            .sample_rate(incoming_sample_rate as i64)
             .chunk_size(silero_chunk_size)
             .build()
             .expect("valid Silero VAD configuration");
 
         let webrtc_resampler = Resampler::new(
-            sample_rate as f64,
+            incoming_sample_rate as f64,
             WEBRTC_SAMPLE_RATE as f64,
-            if sample_rate == WEBRTC_SAMPLE_RATE {
+            if incoming_sample_rate == WEBRTC_SAMPLE_RATE {
                 Some(silero_chunk_size)
             } else {
                 Some(silero_chunk_size / 2)
@@ -93,7 +99,7 @@ impl VoiceDetection {
 
         Ok(Self {
             samples_buffer: Vec::with_capacity(silero_chunk_size * 2),
-            sample_rate,
+            sample_rate: incoming_sample_rate,
 
             webrtc_resampler,
             webrtc_vad: WebRtcVoiceActivityDetector::new(webrtc_vad_profile),
