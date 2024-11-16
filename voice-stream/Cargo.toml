@@ -2,6 +2,15 @@
 name = "voice-stream"
 version = "0.1.0"
 edition = "2021"
+description = """
+Voice stream is a real-time audio stream processing with voice activity detection.
+This library provides a high-level interface for capturing audio input, performing voice detection using both WebRTC VAD and Silero VAD, and processing audio streams.
+"""
+
+homepage = "https://github.com/voicekick/voicekick"
+repository = "https://github.com/voicekick/voicekick"
+license = "BSD-3-Clause"
+documentation = "https://docs.rs/voice-stream"
 
 [features]
 windows = ["cpal/asio"]
