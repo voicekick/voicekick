@@ -1,0 +1,9 @@
+[package]
+name = "voice-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+voice-stream = { path = "../voice-stream" }
+symphonia-core = "0.5.4"
+symphonia = "0.5.4"
