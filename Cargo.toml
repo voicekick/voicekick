@@ -3,6 +3,8 @@ resolver = "2"
 
 members = [
   "voice-stream",
+  "voice-tests",
+  "voicekick",
 ]
 
 [profile.release]

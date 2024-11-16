@@ -1,0 +1,14 @@
+[package]
+name = "voicekick"
+version = "0.1.0"
+edition = "2021"
+description = """
+Voice kick is a functions mesh activated agentic framework activated by voice and text.
+It is designed to be used in a variety of applications, from simple home automation to complex interactions.
+"""
+homepage = "https://github.com/voicekick/voicekick"
+repository = "https://github.com/voicekick/voicekick"
+license = "BSD-3-Clause"
+documentation = "https://docs.rs/voicekick"
+
+[dependencies]
