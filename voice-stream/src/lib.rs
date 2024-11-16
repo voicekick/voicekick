@@ -56,7 +56,7 @@ pub fn samples_to_duration(samples: usize, sample_rate: Option<f64>) -> Duration
 }
 
 /// Voice input stream builder
-pub struct VoiceInputStreamBuilder {
+pub struct VoiceStreamBuilder {
     supported_config: SupportedStreamConfig,
     device: Device,
     tx: InputSoundSender,
@@ -66,7 +66,7 @@ pub struct VoiceInputStreamBuilder {
     voice_detection_silero_threshold: f32,
 }
 
-impl VoiceInputStreamBuilder {
+impl VoiceStreamBuilder {
     /// Create a new voice input stream builder
     pub fn new(
         supported_config: SupportedStreamConfig,
@@ -125,7 +125,7 @@ impl VoiceInputStreamBuilder {
     }
 
     /// Build a voice input stream
-    pub fn build(self) -> Result<VoiceInputStream, VoiceInputError> {
+    pub fn build(self) -> Result<VoiceStream, VoiceInputError> {
         let outgoing_sample_rate = SAMPLE_RATE;
 
         let voice_detection = VoiceDetection::new(
@@ -151,16 +151,22 @@ impl VoiceInputStreamBuilder {
         // it is paused rather than working-around lazy initialization of the stream with locks or w/e.
         let _ = input_stream.pause()?;
 
-        Ok(VoiceInputStream { input_stream })
+        Ok(VoiceStream { input_stream })
     }
 }
 
 /// Voice handler
-pub struct VoiceInputStream {
+///
+/// 1. Captures audio from the given input device
+/// 2. Resamples the audio to the desired sample rate (16kHz default)
+/// 3. Detects voice activity using WebRTC VAD and Silero VAD
+/// 4. Sends the voice data to the receiver channel in chunks
+/// 5. The receiver channel can expect to receive voice data in chunks of 512<= samples
+pub struct VoiceStream {
     input_stream: Box<dyn StreamTrait>,
 }
 
-impl VoiceInputStream {
+impl VoiceStream {
     /// Initialize input sound handler
     pub fn default_device() -> VoiceInputResult<(Self, InputSoundReceiver)> {
         let host = cpal::default_host();
@@ -177,13 +183,13 @@ impl VoiceInputStream {
         let (tx, receiver) = mpsc::channel();
 
         Ok((
-            VoiceInputStreamBuilder::new(config, device, tx).build()?,
+            VoiceStreamBuilder::new(config, device, tx).build()?,
             receiver,
         ))
     }
 }
 
-impl StreamTrait for VoiceInputStream {
+impl StreamTrait for VoiceStream {
     fn play(&self) -> Result<(), PlayStreamError> {
         self.input_stream.play()
     }
