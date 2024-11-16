@@ -1,4 +1,5 @@
 use rubato::{make_buffer, FastFixedIn, Resampler as _};
+use tracing::trace;
 
 use crate::{traits::IntoF32, VoiceInputResult};
 
@@ -30,11 +31,11 @@ impl Resampler {
         let resample_ratio = output_sample_ratio / input_sample_ratio;
         let max_resample_ratio_relative = 10.0;
 
-        // println!(
-        //     "Resampler new channels {} input_sample_ratio {} output_sample_ratio {} resample_ratio {}",
-        //     channels,
-        //     input_sample_ratio, output_sample_ratio, resample_ratio
-        // );
+        trace!(
+            "Resampler new channels {} input_sample_ratio {} output_sample_ratio {} resample_ratio {}",
+            channels,
+            input_sample_ratio, output_sample_ratio, resample_ratio
+        );
 
         let resampler_chunk_size = chunk_size.unwrap_or(1024);
 

@@ -1611,6 +1611,7 @@ dependencies = [
  "earshot",
  "rubato",
  "tokio",
+ "tracing",
  "voice-tests",
  "voice_activity_detector",
 ]

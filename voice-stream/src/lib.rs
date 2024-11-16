@@ -40,6 +40,9 @@ pub mod voice;
 mod resampler;
 pub use resampler::Resampler;
 
+mod sound;
+use sound::SoundStream;
+
 /// Default sample rate
 pub const SAMPLE_RATE: usize = 16000;
 
@@ -201,61 +204,6 @@ impl StreamTrait for VoiceStream {
     }
 }
 
-/// Sound stream with VAD
-struct SoundStream {
-    buffer: Vec<f32>,
-    buffer_size: usize,
-
-    resampler: Resampler,
-
-    voice_detection: VoiceDetection,
-}
-
-impl SoundStream {
-    pub fn new(
-        incoming_sample_rate: usize,
-        outgoing_sample_rate: usize,
-        channels: usize,
-        buffer_size: usize,
-        voice_detection: VoiceDetection,
-    ) -> VoiceInputResult<Self> {
-        let resampler = Resampler::new(
-            incoming_sample_rate as f64,
-            outgoing_sample_rate as f64,
-            Some(1024),
-            channels,
-        )?;
-
-        Ok(Self {
-            buffer: Vec::with_capacity(buffer_size),
-            buffer_size,
-
-            resampler,
-            voice_detection,
-        })
-    }
-
-    fn process_input_data<T>(&mut self, input: &[T], sender: &InputSoundSender)
-    where
-        T: cpal::Sample + IntoF32,
-    {
-        // Pre-process the incoming audio samples by converting to f32,
-        let samples = self.resampler.process(&input);
-
-        self.buffer.extend(samples);
-
-        if self.buffer.len() >= self.buffer_size {
-            let buffer = self.buffer.split_off(0);
-
-            if let Some(voice_buffer) = self.voice_detection.add_samples(buffer) {
-                if let Err(e) = sender.send(voice_buffer) {
-                    eprintln!("Failed to send voice data to channel: {:?}", e);
-                }
-            }
-        }
-    }
-}
-
 fn create_stream(
     mut sound_stream: SoundStream,
     supported_config: SupportedStreamConfig,
@@ -263,7 +211,7 @@ fn create_stream(
     sender: InputSoundSender,
 ) -> VoiceInputResult<Box<dyn StreamTrait>> {
     let sample_format = supported_config.sample_format();
-    let config: StreamConfig = supported_config.clone().into();
+    let config: StreamConfig = supported_config.into();
 
     let err_fn = move |err| {
         eprintln!("An error occurred on stream: {}", err);

@@ -2,6 +2,7 @@ use earshot::{
     VoiceActivityDetector as WebRtcVoiceActivityDetector,
     VoiceActivityProfile as WebRtcVoiceActivityProfile,
 };
+use tracing::{debug, trace};
 use voice_activity_detector::VoiceActivityDetector as SileroVoiceActivityDetector;
 
 use crate::{traits::IntoI16, Resampler, VoiceInputResult, SAMPLE_RATE};
@@ -21,6 +22,19 @@ const WEBRTC_SAMPLE_RATE: usize = 8000;
 // it's good enough to take just first sample hence .take(240)
 const WEBRTC_CHUNK_SIZE: usize = 240;
 
+/// Voice detection using WebRTC and Silero VAD.
+/// Requires either 8000Hz or 16000 Hz sample rate.
+/// Assumes incoming samples are mono channel
+///
+/// WebRTC VAD
+/// - requires 8000 Hz sample rate.
+/// - chunk size must be at most 240 when 8000 Hz is used.
+///
+/// Silero VAD
+///  - requires 8000 Hz or 16000 Hz sample rate.
+///  - chunk size must be at least 512 when 16000 Hz or more is used.
+///  - chunk size must be at least 256 when 8000 Hz is used.
+///  - voice threshold is set to 0.1 by default.
 pub struct VoiceDetection {
     samples_buffer: Vec<f32>,
     sample_rate: usize,
@@ -139,19 +153,19 @@ impl VoiceDetection {
         let predict = self.silero_vad_prediction(samples.clone());
         let is_voice = predict > self.silero_vad_voice_threshold;
 
-        // println!(
-        //     "add_samples is_noise {} is_voice {} predict {:.7} SILENCE PREDICT {:.7}",
-        //     if is_noise { 1 } else { 0 },
-        //     if is_voice { 1 } else { 0 },
-        //     predict,
-        //     self.silero_predict_buffer.iter().sum::<f32>()
-        //         / self.silero_predict_buffer.len() as f32,
-        // );
+        trace!(
+            "add_samples is_noise {} is_voice {} predict {:.7} SILENCE PREDICT {:.7}",
+            if is_noise { 1 } else { 0 },
+            if is_voice { 1 } else { 0 },
+            predict,
+            self.silero_predict_buffer.iter().sum::<f32>()
+                / self.silero_predict_buffer.len() as f32,
+        );
 
         // Step 3: Match on the (has_sound, is_voice) tuple to handle cases
         match (is_noise, is_voice) {
             (true, true) => {
-                println!(
+                debug!(
                     "add_samples TT predict {:.7} SILENCE PREDICT {:.7}",
                     predict,
                     self.silero_predict_buffer.iter().sum::<f32>()
@@ -163,7 +177,7 @@ impl VoiceDetection {
                 None
             }
             (true, false) => {
-                println!(
+                debug!(
                     "add_samples TF predict {:.7} SILENCE PREDICT {:.7}",
                     predict,
                     self.silero_predict_buffer.iter().sum::<f32>()

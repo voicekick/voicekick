@@ -85,11 +85,6 @@ async fn test_webrtc_vad_is_noise() {
     // WebRTC is constantly mutating it's state curiously without this loop tests will not pass
     // hence tests are not deterministic but based on the full input
     for (_i, chunk) in chunks.iter().enumerate() {
-        // println!(
-        //     "Chunk {} webrtc is noise {}",
-        //     i,
-        //     vd.webrtc_vad_is_noise(chunk)
-        // );
         vd.webrtc_vad_is_noise(chunk);
     }
 
@@ -165,11 +160,6 @@ async fn test_vad_combined() {
             if is_voice {
                 times_voice += 1;
             }
-
-            // println!(
-            //     "Chunk {} is_noise: {} is_voice: {} silero_predict: {:.7}",
-            //     i, is_noise, is_voice, silero_predict
-            // );
         }
 
         println!("File {file} Silero threshold: {}", silero_predict_treshold);
