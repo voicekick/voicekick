@@ -11,7 +11,10 @@ where
     input.iter().map(|sample| sample.into_f32()).collect()
 }
 
-/// Voice input stream
+/// Resampler for audio samples
+/// - default polynomial degree: Septic
+/// - default max_resample_ratio_relative: 10.0
+/// - default chunk_size: 1024
 pub struct Resampler {
     channels: usize,
 
@@ -21,6 +24,11 @@ pub struct Resampler {
 }
 
 impl Resampler {
+    /// Create a new Resampler
+    /// input_sample_ratio: input sample rate
+    /// output_sample_ratio: output sample rate
+    /// chunk_size: number of samples to process at a time, default 1024
+    /// channels: number of channels in the audio
     pub fn new(
         input_sample_ratio: f64,
         output_sample_ratio: f64,

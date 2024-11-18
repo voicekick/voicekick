@@ -13,7 +13,7 @@ pub(crate) struct SoundStream {
 }
 
 impl SoundStream {
-    pub fn new(
+    pub(crate) fn new(
         incoming_sample_rate: usize,
         outgoing_sample_rate: usize,
         channels: usize,

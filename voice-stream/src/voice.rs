@@ -66,7 +66,9 @@ impl VoiceDetection {
     ///
     /// Silero VAD expects chunk size to be at least 512 when 16000 Hz or more is used
     //  - The model is trained using chunk sizes of 256, 512, and 768 samples for an 8000 hz sample rate.
-    //  - It is trained using chunk sizes of 512, 768, 1024 samples for a 16,000 hz sample rate. These values are recommended for optimal performance, but are not required. The only requirement imposed by the underlying model is the sample rate must be no larger than 31.25 times the chunk size.
+    //  - It is trained using chunk sizes of 512, 768, 1024 samples for a 16,000 hz sample rate.
+    //  - These values are recommended for optimal performance, but are not required.
+    //  - The only requirement imposed by the underlying model is the sample rate must be no larger than 31.25 times the chunk size.
     pub fn new(
         incoming_sample_rate: usize,
         webrtc_vad_profile: WebRtcVoiceActivityProfile,

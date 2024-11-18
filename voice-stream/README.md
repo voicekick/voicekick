@@ -1,7 +1,8 @@
 # Voice Stream
 
 A Rust library for real-time voice activity detection and audio stream processing.
-This library provides a high-level interface for capturing audio input, performing voice detection using both WebRTC VAD and Silero VAD, and processing audio streams.
+This library provides a high-level interface for capturing audio input,
+performing voice detection using both WebRTC VAD and Silero VAD, and processing audio streams.
 
 ## Features
 

@@ -21,9 +21,45 @@ impl IntoF32 for i32 {
     }
 }
 
+impl IntoF32 for i64 {
+    fn into_f32(self) -> f32 {
+        self as f32 / i64::MAX as f32
+    }
+}
+
+impl IntoF32 for u8 {
+    fn into_f32(self) -> f32 {
+        self as f32 / u8::MAX as f32
+    }
+}
+
+impl IntoF32 for u16 {
+    fn into_f32(self) -> f32 {
+        self as f32 / u16::MAX as f32
+    }
+}
+
+impl IntoF32 for u32 {
+    fn into_f32(self) -> f32 {
+        self as f32 / u32::MAX as f32
+    }
+}
+
+impl IntoF32 for u64 {
+    fn into_f32(self) -> f32 {
+        self as f32 / u64::MAX as f32
+    }
+}
+
 impl IntoF32 for f32 {
     fn into_f32(self) -> f32 {
         self // Already in f32 format
+    }
+}
+
+impl IntoF32 for f64 {
+    fn into_f32(self) -> f32 {
+        self as f32
     }
 }
 
