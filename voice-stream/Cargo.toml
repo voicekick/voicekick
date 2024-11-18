@@ -1,6 +1,6 @@
 [package]
 name = "voice-stream"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = """
 Voice stream is a real-time audio stream processing with voice activity detection.
