@@ -11,7 +11,7 @@ use crate::{traits::IntoI16, Resampler, VoiceInputResult, SAMPLE_RATE};
 pub const SILERO_VAD_CHUNK_SIZE: usize = 512;
 
 /// Silero VAD voice threshold
-pub const SILERO_VAD_VOICE_THRESHOLD: f32 = 0.1;
+pub const SILERO_VAD_VOICE_THRESHOLD: f32 = 0.01;
 
 const WEBRTC_SAMPLE_RATE: usize = 8000;
 
