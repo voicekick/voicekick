@@ -8,6 +8,7 @@ use voice_stream::{voice::VoiceDetection, Resampler, WebRtcVoiceActivityProfile}
 
 pub type BoxError = Box<dyn StdError + Send + Sync>;
 
+/// Voice datasets path
 pub fn voice_datasets_path(path: &str) -> String {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_HOME should be set");
     let (workspace_dir, _) = manifest_dir.rsplit_once("/").unwrap();
@@ -15,6 +16,7 @@ pub fn voice_datasets_path(path: &str) -> String {
     format!("{workspace_dir}/voice-tests/voice-datasets/{path}")
 }
 
+/// Matching speech commands path
 pub fn matching_speech_commands_path(path: &str) -> String {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_HOME should be set");
     let (workspace_dir, _) = manifest_dir.rsplit_once("/").unwrap();
@@ -22,30 +24,33 @@ pub fn matching_speech_commands_path(path: &str) -> String {
     format!("{workspace_dir}/voice-tests/matching-speech-commands/{path}")
 }
 
+/// Read voice dataset WAV into samples
 pub fn read_voice_dataset_wav_into_samples(path: &str) -> (Vec<f32>, CodecParameters) {
     read_wav_into_samples(&voice_datasets_path(path))
 }
 
+/// Read WAV into samples
 pub fn read_wav_into_samples(path: &str) -> (Vec<f32>, CodecParameters) {
     let (samples, codec_params) = pcm_decode(path).expect("Failed to decode PCM");
 
-    // let sample_rate = codec_params.sample_rate.unwrap_or(0) as usize;
-    // let channels = codec_params
-    //     .channels
-    //     .map(|channels| channels.count())
-    //     .unwrap_or(1);
+    let sample_rate = codec_params.sample_rate.unwrap_or(0) as usize;
+    let channels = codec_params
+        .channels
+        .map(|channels| channels.count())
+        .unwrap_or(1);
 
-    // println!(
-    //     "READ samples {} file '{}' sample rate {} channels {}",
-    //     samples.len(),
-    //     path,
-    //     sample_rate,
-    //     channels,
-    // );
+    println!(
+        "READ samples {} file '{}' sample rate {} channels {}",
+        samples.len(),
+        path,
+        sample_rate,
+        channels,
+    );
 
     (samples, codec_params)
 }
 
+/// Preprocess samples
 pub fn preprocess_samples(
     incoming_sample_rate: usize,
     outgoing_sample_rate: usize,
@@ -61,16 +66,16 @@ pub fn preprocess_samples(
     )
     .expect("Failed to create Resampler");
 
-    // let before = samples.len();
+    let before = samples.len();
     let samples = resampler.process(&samples);
-    // let after = samples.len();
+    let after = samples.len();
 
-    // println!(
-    //     "PREPROCESS RATIO {:.1} samples {} -> {}",
-    //     after as f32 / before as f32,
-    //     before,
-    //     after
-    // );
+    println!(
+        "PREPROCESS RATIO {:.1} samples {} -> {}",
+        after as f32 / before as f32,
+        before,
+        after
+    );
 
     samples
 }

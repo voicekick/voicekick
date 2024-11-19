@@ -7,3 +7,9 @@ edition = "2021"
 voice-stream = { path = "../voice-stream" }
 symphonia-core = "0.5.4"
 symphonia = "0.5.4"
+
+[dev-dependencies]
+ringbuf = "0.4.7"
+mel_spec = "0.2.7"
+cpal = { version = "0.15", default-features = false, features = [] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util"] }

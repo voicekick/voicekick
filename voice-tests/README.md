@@ -70,4 +70,3 @@ let vad = new_voice_detection(
 ## License
 
 This project is available under the MIT License. Note that while this code is open source, when using voice datasets, make sure to comply with their respective licenses and terms of use.
-```
