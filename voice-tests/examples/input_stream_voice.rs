@@ -1,11 +1,21 @@
 use std::sync::mpsc;
 
 use tokio::io::{self, AsyncBufReadExt, BufReader};
+use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::EnvFilter;
 use voice_stream::cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use voice_stream::{samples_to_duration, VoiceInputError, VoiceStreamBuilder};
 
 #[tokio::main]
 async fn main() -> Result<(), VoiceInputError> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::DEBUG.into())
+                .from_env_lossy(),
+        )
+        .init();
+
     let host = cpal::default_host();
 
     let select_device = "default";
