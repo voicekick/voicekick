@@ -41,7 +41,7 @@ impl SoundStream {
         T: cpal::Sample + IntoF32,
     {
         // Pre-process the incoming audio samples by converting to f32,
-        let samples = self.resampler.process(&input);
+        let samples = self.resampler.process(input);
 
         self.buffer.extend(samples);
 

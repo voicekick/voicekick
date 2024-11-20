@@ -113,7 +113,7 @@ impl VoiceStreamBuilder {
 
     pub fn with_voice_detection_silero_voice_threshold(mut self, threshold: f32) -> Self {
         assert!(
-            threshold >= 0.0 && threshold <= 1.0,
+            (0.0..=1.0).contains(&threshold),
             "Silero VAD voice threshold must be between 0.0 and 1.0"
         );
         self.voice_detection_silero_threshold = threshold;
@@ -154,7 +154,7 @@ impl VoiceStreamBuilder {
         // Unfortunately, CPAL does not have a built-in mechanism for creating an input stream in a paused state.
         // This is workaround for the limitation of CPAL explicitly calling pause on the stream to ensure
         // it is paused rather than working-around lazy initialization of the stream with locks or w/e.
-        let _ = input_stream.pause()?;
+        input_stream.pause()?;
 
         Ok(VoiceStream { input_stream })
     }

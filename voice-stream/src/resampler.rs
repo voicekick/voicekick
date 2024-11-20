@@ -122,7 +122,7 @@ impl Resampler {
             })
             .collect();
 
-        if incomplete_chunk.len() > 0 {
+        if !incomplete_chunk.is_empty() {
             let samples = into_channeled_samples(&incomplete_chunk);
 
             // Padding of the last chunk is handled by the process_partial_into_buffer
@@ -137,7 +137,7 @@ impl Resampler {
     fn resample_partial_audio(&mut self, input: &[Vec<f32>]) -> Vec<f32> {
         let resampled_samples = self
             .resampler
-            .process_partial(Some(&input), None)
+            .process_partial(Some(input), None)
             .expect("valid partial buffer");
 
         samples_into_mono_channel(resampled_samples)

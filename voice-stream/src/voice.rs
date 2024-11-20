@@ -168,7 +168,7 @@ impl VoiceDetection {
         match (is_noise, is_voice) {
             (true, true) => {
                 debug!(
-                    "add_samples TT predict {:.7} SILENCE PREDICT {:.7}",
+                    "add_samples[+] TT predict {:.7} SILENCE PREDICT {:.7}",
                     predict,
                     self.silero_predict_buffer.iter().sum::<f32>()
                         / self.silero_predict_buffer.len() as f32,
@@ -180,7 +180,7 @@ impl VoiceDetection {
             }
             (true, false) => {
                 debug!(
-                    "add_samples TF predict {:.7} SILENCE PREDICT {:.7}",
+                    "add_samples[-] TF predict {:.7} SILENCE PREDICT {:.7}",
                     predict,
                     self.silero_predict_buffer.iter().sum::<f32>()
                         / self.silero_predict_buffer.len() as f32,
