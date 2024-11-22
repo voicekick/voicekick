@@ -1,1 +1,4 @@
 /target
+/voice-tests/voice-datasets/
+/voice-tests/speech-commands/
+/voice-tests/matching-speech-commands/
