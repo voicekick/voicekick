@@ -3247,7 +3247,6 @@ dependencies = [
  "hf-hub",
  "inference-candle",
  "mel_spec",
- "num-traits",
  "rand",
  "serde_json",
  "tokenizers",
