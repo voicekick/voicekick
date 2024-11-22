@@ -4,8 +4,9 @@
 use candle_core::utils::get_num_threads;
 use std::sync::Arc;
 use std::thread;
+use tracing::debug;
 
-use crate::audio_params::{CHUNK_LENGTH, HOP_LENGTH, N_FFT};
+use crate::audio_params::{HOP_LENGTH, N_FFT};
 
 pub trait Float:
     num_traits::Float + num_traits::FloatConst + num_traits::NumAssign + Send + Sync
@@ -189,25 +190,28 @@ pub fn log_mel_spectrogram_<T: Float>(
         .collect();
     let n_len = samples.len() / fft_step;
 
-    // pad audio with at least one extra chunk of zeros
-    // Define the padding size. Ensure CHUNK_LENGTH is non-zero to avoid division by zero.
-    let pad = if CHUNK_LENGTH > 0 {
-        100 * CHUNK_LENGTH / 2
+    // Minimal padding - just enough to complete the last FFT window
+    let remainder = samples.len() % fft_step;
+    let pad = if remainder > 0 {
+        fft_step - remainder
     } else {
-        1 // Use a default non-zero pad to avoid division by zero issues
+        0
     };
 
-    let n_len = if n_len % pad != 0 {
-        (n_len / pad + 1) * pad
-    } else {
-        n_len
-    };
-    let n_len = n_len + pad;
-    let samples = {
+    debug!(
+        "samples {} fft_size {fft_size} fft_step {fft_step} n_len {} remainder {} pad {}",
+        samples.len(),
+        n_len,
+        remainder,
+        pad
+    );
+
+    let samples = if pad > 0 {
         let mut samples_padded = samples.to_vec();
-        let to_add = n_len * fft_step - samples.len();
-        samples_padded.extend(std::iter::repeat(zero).take(to_add));
+        samples_padded.extend(std::iter::repeat(zero).take(pad));
         samples_padded
+    } else {
+        samples.to_vec()
     };
 
     // ensure that the number of threads is even and less than 12
@@ -323,7 +327,7 @@ mod tests {
         let samples = vec![0.0; 1000];
         let filters = vec![0.0; 1000];
         let output = log_mel_spectrogram_(&samples, &filters, 100, 10, 10, false);
-        assert_eq!(output.len(), 20_000);
+        assert_eq!(output.len(), 1000);
     }
 
     #[test]
@@ -331,6 +335,6 @@ mod tests {
         let samples = vec![0.0; 100];
         let filters = vec![0.0; 100];
         let output = log_mel_spectrogram_(&samples, &filters, 20, 2, 2, false);
-        assert_eq!(output.len(), 4_000);
+        assert_eq!(output.len(), 100);
     }
 }
