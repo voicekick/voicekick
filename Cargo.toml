@@ -5,6 +5,8 @@ members = [
   "voice-stream",
   "voice-tests",
   "voicekick",
+  "inference-candle",
+  "voice-whisper"
 ]
 
 [profile.release]
@@ -17,3 +19,6 @@ overflow-checks = false
 panic = 'abort'         # The panic strategy.
 incremental = true       # Incremental compilation.
 strip = true
+
+[workspace.dependencies]
+tracing = "0.1.40"

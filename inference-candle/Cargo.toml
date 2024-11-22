@@ -1,0 +1,8 @@
+[package]
+name = "inference-candle"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+candle-core = { version = "0.8", default-features = false, features = [] }
+tracing = { workspace = true }

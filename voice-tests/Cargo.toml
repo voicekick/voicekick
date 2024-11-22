@@ -14,3 +14,6 @@ mel_spec = "0.2.7"
 cpal = { version = "0.15", default-features = false, features = [] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+inference-candle = { path = "../inference-candle" }
+voice-whisper = { path = "../voice-whisper" }
+similar-asserts = "1"

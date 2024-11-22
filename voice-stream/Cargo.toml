@@ -20,7 +20,7 @@ linux = ["cpal/jack"]
 cpal = { version = "0.15", default-features = false, features = [] }
 earshot = "0.1.0"
 rubato = { version = "0.16", default-features = false, features = ["fft_resampler"] }
-tracing = "0.1.40"
+tracing = { workspace = true }
 voice_activity_detector = "0.1"
 
 [dev-dependencies]

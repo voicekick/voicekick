@@ -1,6 +1,5 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use audio_params::{HOP_LENGTH, SAMPLE_RATE};
 use candle_core::{Device, IndexOp, Shape, Tensor};
 use candle_nn::{ops::softmax, VarBuilder};
 use candle_transformers::models::whisper::{self as m, Config};
@@ -19,26 +18,48 @@ mod audio;
 mod multilingual;
 
 pub mod audio_params {
-    // Audio parameters.
+    // Sample rate
     pub const SAMPLE_RATE: usize = 16000;
-    pub const N_FFT: usize = 400;
-    pub const HOP_LENGTH: usize = 128;
-    // Responsiveness: Shorter chunks (e.g., 10-30 ms) provide faster response times, which is crucial for real-time applications.
-    pub const CHUNK_LENGTH: usize = 20;
-    pub const N_SAMPLES: usize = CHUNK_LENGTH * SAMPLE_RATE; // 320000 samples in a 30-second chunk
-    pub const N_FRAMES: usize = N_SAMPLES / HOP_LENGTH; // 2500 frames in a mel spectrogram input
 
-    pub const NO_SPEECH_THRESHOLD: f64 = 0.6;
-    pub const LOGPROB_THRESHOLD: f64 = -1.0;
-    // pub const LOGPROB_THRESHOLD: f64 = -0.5; TODO:
+    /// For each FFT operation:
+    /// - Takes 400 samples window
+    /// - Overlaps by (400-128) = 272 samples with previous window
+    /// - Gives ~75% overlap between consecutive windows
+    /// - Results in 16000/128 ≈ 125 frames per second
+    /// Each window:
+    /// |----400 samples----|
+    ///       |----400 samples----|
+    ///             |----400 samples----|
+    /// Moving by 128 samples each time
+    pub const N_FFT: usize = 400;
+
+    /// The overlap (N_FFT - HOP_LENGTH) helps capture smooth transitions and
+    /// transient features in the audio signal.
+    ///
+    /// Original: (400-128)/400 = 68% overlap
+    /// - 200;  // 50% overlap
+    /// - 300;  // 25% overlap
+    ///
+    /// Tradeoff: larger HOP_LENGTH = faster processing but may miss audio transitions
+    /// Minimum recommended overlap is 25%
+    pub const HOP_LENGTH: usize = 160;
+
+    /// For Whisper, preferred max segment sizes in mel spectrogram frames:
+    /// - Optimal: 1500 frames (~30 seconds of audio)
+    /// - Maximum supported: 3000 frames (~60 seconds)
+    /// - Real-time recommended: 800-1000 frames (~16-20 seconds)
+    pub const N_FRAMES_MAX: usize = 3000;
+
+    pub const NO_SPEECH_THRESHOLD: f64 = 0.7;
+    pub const LOGPROB_THRESHOLD: f64 = -1.5;
 
     /// A good starting temperature for the Whisper model is typically around 0.7 to 1.0. This range allows for a balance between deterministic and diverse outputs:
     /// - Lower temperatures (e.g., 0.5 or below) produce more consistent and predictable outputs, suitable for structured tasks where clarity is key.
     /// - Higher temperatures (e.g., 1.0 and above) introduce more variability, allowing the model to generate more creative or varied responses.
     ///
     /// Start at 0.7 for balanced behavior and adjust based on whether you want more stability or diversity in your output.
-    pub const TEMPERATURES: [f64; 7] = [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
-    // pub const TEMPERATURES: [f64; 1] = [0.5];
+    // pub const TEMPERATURES: [f64; 7] = [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+    pub const TEMPERATURES: [f64; 1] = [0.0];
     // pub const TEMPERATURES: [f64; 11] = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
     pub const COMPRESSION_RATIO_THRESHOLD: f64 = 2.4;
 }
@@ -259,6 +280,7 @@ pub struct Decoder {
     sot_token: u32,
     transcribe_token: u32,
     eot_token: u32,
+    space_token: u32,
     no_speech_token: u32,
     no_timestamps_token: u32,
     language_token: Option<u32>,
@@ -336,6 +358,8 @@ impl Decoder {
             &mut mel_filters,
         );
 
+        let space_token = vector_into_tokens(&tokenizer, &[" "])[0];
+
         let boost_tokens = vector_into_tokens(
             &tokenizer,
             &[
@@ -372,6 +396,7 @@ impl Decoder {
             sot_token,
             transcribe_token,
             eot_token,
+            space_token,
             no_speech_token,
             language_token,
             no_timestamps_token,
@@ -402,151 +427,48 @@ impl Decoder {
         Tensor::from_vec(mel, shape, &self.device).map_err(Into::into)
     }
 
-    pub fn real_time(&mut self, pcm: &[f32]) -> InferenceResult<Vec<proto::Segment>> {
+    pub fn with_mel_segments(&mut self, pcm: &[f32]) -> InferenceResult<Vec<proto::Segment>> {
         let mel = self.pcm_to_mel(pcm)?;
 
         self.segments2(&mel)
-    }
-
-    pub fn bulk_time(&mut self, pcm: &[f32]) -> InferenceResult<Vec<proto::Segment>> {
-        let mel = self.pcm_to_mel(pcm)?;
-
-        self.segments2(&mel)
-    }
-
-    pub fn real_time_segments(&mut self, mel: &Tensor) -> InferenceResult<Vec<proto::Segment>> {
-        let (_, _, content_frames) = mel.dims3()?;
-
-        let mut seek = 0;
-        let mut segments = vec![];
-
-        let min_chunk_size = 512;
-        let max_chunk_size = 2048;
-        let segment_size = usize::min(content_frames, max_chunk_size);
-
-        while seek < content_frames {
-            let chunk_size = usize::min(segment_size, content_frames - seek);
-
-            // println!(
-            //     "content_frames {} segment_size {} seek {} chunk_size {}",
-            //     content_frames, segment_size, seek, chunk_size
-            // );
-
-            if chunk_size < min_chunk_size {
-                println!("BREAK");
-                break; // Exit loop if the remaining chunk is too small
-            }
-
-            let mel_segment = mel.narrow(2, seek, chunk_size)?;
-
-            let dr = self.decode_with_fallback(&mel_segment)?;
-
-            seek += chunk_size;
-
-            if dr.no_speech_prob > audio_params::NO_SPEECH_THRESHOLD
-                && dr.avg_logprob < audio_params::LOGPROB_THRESHOLD
-            {
-                println!("No speech detected, skipping {seek} {dr:?}");
-                continue;
-            }
-
-            let segment = Segment {
-                start: (seek * HOP_LENGTH) as f64 / SAMPLE_RATE as f64,
-                duration: (chunk_size * HOP_LENGTH) as f64 / SAMPLE_RATE as f64,
-                dr,
-            };
-
-            // println!(
-            //     "{:.1}s -- {:.1}s: {} no_speech_prob {:.2} avg_logprob {:.2}",
-            //     segment.start,
-            //     segment.start + segment.duration,
-            //     segment.dr.text,
-            //     segment.dr.no_speech_prob,
-            //     segment.dr.avg_logprob,
-            // );
-
-            segments.push(segment);
-        }
-
-        Ok(segments)
     }
 
     pub fn segments2(&mut self, mel: &Tensor) -> InferenceResult<Vec<proto::Segment>> {
         let (_, _, content_frames) = mel.dims3()?;
-        let mut seek = 0;
-        let mut segments = vec![];
 
-        // Parameters for segment size control
-        let min_chunk_size = 512;
-        let max_chunk_size = 2048;
-        let preferred_size = usize::min(content_frames, max_chunk_size);
-
-        while seek < content_frames {
-            // Determine optimal chunk size based on remaining content
-            let remaining_frames = content_frames - seek;
-            let chunk_size = if remaining_frames < min_chunk_size {
-                // If remaining frames are too small, process everything at once
-                remaining_frames
-            } else {
-                // Otherwise use the optimal size or remaining frames, whichever is smaller
-                usize::min(preferred_size, remaining_frames)
-            };
-
-            // Calculate timing information
-            let time_offset =
-                (seek * audio_params::HOP_LENGTH) as f64 / audio_params::SAMPLE_RATE as f64;
-            let segment_duration =
-                (chunk_size * audio_params::HOP_LENGTH) as f64 / audio_params::SAMPLE_RATE as f64;
-
-            // Process the audio segment
-            let mel_segment = mel.narrow(2, seek, chunk_size)?;
-            let dr = self.decode_with_fallback(&mel_segment)?;
-
-            // Skip segments with no meaningful speech content
-            if dr.no_speech_prob > audio_params::NO_SPEECH_THRESHOLD
-                && dr.avg_logprob < audio_params::LOGPROB_THRESHOLD
-            {
-                seek += chunk_size;
-                continue;
-            }
-
-            // Create and store the segment
-            let segment = Segment {
-                start: time_offset,
-                duration: segment_duration,
+        // For very short content, process as single chunk
+        if content_frames <= audio_params::N_FRAMES_MAX {
+            let dr = self.decode_with_fallback(mel)?;
+            return Ok(vec![Segment {
+                start: 0.0,
+                duration: (content_frames * audio_params::HOP_LENGTH) as f64
+                    / audio_params::SAMPLE_RATE as f64,
                 dr,
-            };
-
-            segments.push(segment);
-            seek += chunk_size;
-
-            // Optional: Break if remaining chunk is too small for processing
-            if remaining_frames - chunk_size < min_chunk_size {
-                break;
-            }
+            }]);
         }
 
-        Ok(segments)
-    }
-
-    fn bulk_segments(&mut self, mel: &Tensor) -> InferenceResult<Vec<proto::Segment>> {
-        let (_, _, content_frames) = mel.dims3()?;
         let mut seek = 0;
         let mut segments = vec![];
 
+        // Max chunk size for Whisper is 3000 frames
+        let max_chunk_size = audio_params::N_FRAMES_MAX;
+
+        let max_real_time_chunk_size: usize = 8 * audio_params::HOP_LENGTH;
+        let content_chunks = content_frames / audio_params::HOP_LENGTH;
+        let chunk_size = std::cmp::min(
+            content_chunks * audio_params::HOP_LENGTH,
+            max_real_time_chunk_size,
+        );
+
+        let segment_size = usize::min(content_frames, max_chunk_size);
+
         while seek < content_frames {
-            let time_offset =
-                (seek * audio_params::HOP_LENGTH) as f64 / audio_params::SAMPLE_RATE as f64;
+            let segment_size = usize::min(content_frames - seek, segment_size);
 
-            let segment_size = usize::min(content_frames - seek, audio_params::N_FRAMES);
-
-            let segment_duration =
-                (segment_size * audio_params::HOP_LENGTH) as f64 / audio_params::SAMPLE_RATE as f64;
-
-            // println!(
-            //     "content_frames {} seek {} time_offset {} segment_size {} segment_duration {}",
-            //     content_frames, seek, time_offset, segment_size, segment_duration
-            // );
+            println!(
+                "content_frames {} seek {} segment_size {}",
+                content_frames, seek, segment_size
+            );
 
             let mel_segment = mel.narrow(2, seek, segment_size)?;
 
@@ -561,8 +483,9 @@ impl Decoder {
                 continue;
             }
             let segment = Segment {
-                start: time_offset,
-                duration: segment_duration,
+                start: (seek * audio_params::HOP_LENGTH) as f64 / audio_params::SAMPLE_RATE as f64,
+                duration: (segment_size * audio_params::HOP_LENGTH) as f64
+                    / audio_params::SAMPLE_RATE as f64,
                 dr,
             };
             // println!(
@@ -575,6 +498,117 @@ impl Decoder {
             // println!("{seek}: {segment:?}, in {:?}", start.elapsed());
             segments.push(segment)
         }
+        Ok(segments)
+    }
+
+    pub fn bu_segments2(&mut self, mel: &Tensor) -> InferenceResult<Vec<proto::Segment>> {
+        let (_, _, content_frames) = mel.dims3()?;
+
+        println!("content_frames {}", content_frames);
+
+        // For very short content, process as single chunk
+        if content_frames <= 600 {
+            let dr = self.decode_with_fallback(mel)?;
+            return Ok(vec![Segment {
+                start: 0.0,
+                duration: (content_frames * audio_params::HOP_LENGTH) as f64
+                    / audio_params::SAMPLE_RATE as f64,
+                dr,
+            }]);
+        }
+
+        let mut segments = vec![];
+        let base_chunk = 600; // Smaller base chunk size
+        let mut position = 0;
+
+        // First pass: Process sequentially with fixed size chunks
+        while position < content_frames {
+            let current_size = std::cmp::min(base_chunk, content_frames - position);
+            if current_size < 300 {
+                // Skip very small remainders
+                break;
+            }
+
+            let mel_segment = mel.narrow(2, position, current_size)?;
+            let dr = self.decode_with_fallback(&mel_segment)?;
+
+            let time_offset =
+                (position * audio_params::HOP_LENGTH) as f64 / audio_params::SAMPLE_RATE as f64;
+            let duration =
+                (current_size * audio_params::HOP_LENGTH) as f64 / audio_params::SAMPLE_RATE as f64;
+
+            segments.push(Segment {
+                start: time_offset,
+                duration,
+                dr,
+            });
+
+            position += current_size;
+        }
+
+        // Second pass: Process larger chunks to catch any missing context
+        if segments.len() > 1 {
+            let large_chunk = 1200; // Larger chunk for context
+            let mut large_segments = vec![];
+            position = 0;
+
+            while position < content_frames {
+                let current_size = std::cmp::min(large_chunk, content_frames - position);
+                if current_size < 600 {
+                    break;
+                }
+
+                let mel_segment = mel.narrow(2, position, current_size)?;
+                let dr = self.decode_with_fallback(&mel_segment)?;
+
+                let time_offset =
+                    (position * audio_params::HOP_LENGTH) as f64 / audio_params::SAMPLE_RATE as f64;
+                let duration = (current_size * audio_params::HOP_LENGTH) as f64
+                    / audio_params::SAMPLE_RATE as f64;
+
+                large_segments.push(Segment {
+                    start: time_offset,
+                    duration,
+                    dr,
+                });
+
+                position += current_size;
+            }
+
+            // If large chunks gave better results, use them
+            if !large_segments.is_empty() {
+                let large_text = large_segments
+                    .iter()
+                    .map(|s| s.dr.text.trim())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let small_text = segments
+                    .iter()
+                    .map(|s| s.dr.text.trim())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+
+                if large_text.split_whitespace().count() > small_text.split_whitespace().count() {
+                    return Ok(large_segments);
+                }
+            }
+        }
+
+        // Final sanity check: if we got very fragmented results, try one full pass
+        if segments.len() > 4 {
+            if let Ok(dr) = self.decode_with_fallback(mel) {
+                let full_text = dr.text.trim();
+                if !full_text.is_empty() {
+                    return Ok(vec![Segment {
+                        start: 0.0,
+                        duration: (content_frames * audio_params::HOP_LENGTH) as f64
+                            / audio_params::SAMPLE_RATE as f64,
+                        dr,
+                    }]);
+                }
+            }
+        }
+
         Ok(segments)
     }
 }
@@ -592,7 +626,7 @@ impl SpeechRecognitionDecoder for Decoder {
         let mut token_frequencies: HashMap<u32, usize> = HashMap::new();
         let repetition_penalty = 1.2; // Adjust this value to control penalty strength
 
-        // Create suppress mask for punctuation
+        // Initialize suppress mask
         let mut suppress_mask = self.suppress_tokens.clone();
         for &token in &self.penalty_tokens {
             if token < suppress_mask.dims1()? as u32 {
@@ -628,11 +662,10 @@ impl SpeechRecognitionDecoder for Decoder {
             .or_insert(0) += 1;
 
         for i in 0..sample_len {
-            let space_token = 220;
             if i == 0 {
                 // Only penalize space at the beginning
                 suppress_mask = suppress_mask.slice_assign(
-                    &[space_token as usize..=space_token as usize],
+                    &[self.space_token as usize..=self.space_token as usize],
                     &Tensor::new(&[-f32::INFINITY], mel.device())?,
                 )?;
             }
@@ -657,7 +690,7 @@ impl SpeechRecognitionDecoder for Decoder {
             // Apply repetition penalty
             let mut logits_vec: Vec<f32> = logits.to_vec1()?;
             for (token, frequency) in &token_frequencies {
-                if *frequency > 0 {
+                if *frequency > 1 {
                     let token_idx = *token as usize;
                     if token_idx < logits_vec.len() {
                         // Penalize tokens that have appeared before
@@ -670,12 +703,13 @@ impl SpeechRecognitionDecoder for Decoder {
                 }
             }
 
-            // Convert back to tensor and apply punctuation suppression
+            // Convert back to tensor and apply suppression
             logits = Tensor::new(logits_vec.as_slice(), mel.device())?;
             logits = logits.broadcast_add(&suppress_mask)?;
 
             let next_token = if t > 0f64 {
-                let prs = softmax(&(&logits / t)?, 0)?;
+                let effective_temp = t.min(0.7); // Cap temperature for stability
+                let prs = softmax(&(&logits / effective_temp)?, 0)?;
                 let logits_v: Vec<f32> = prs.to_vec1()?;
                 logits_v
                     .iter()
@@ -697,8 +731,8 @@ impl SpeechRecognitionDecoder for Decoder {
             if !self.penalty_tokens.contains(&next_token) {
                 // Update token frequency before adding
                 *token_frequencies.entry(next_token).or_insert(0) += 1;
-
                 tokens.push(next_token);
+
                 let prob = softmax(&logits, candle_core::D::Minus1)?
                     .i(next_token as usize)?
                     .to_scalar::<f32>()? as f64;
@@ -729,7 +763,7 @@ impl SpeechRecognitionDecoder for Decoder {
         for (i, &t) in self.temperatures.clone().iter().enumerate() {
             let dr: InferenceResult<DecodingResult> = self.decode(segment, t);
 
-            // println!("Decoding with temperature {t}: {dr:?}");
+            println!("Decoding with temperature {t}: {dr:?}");
 
             if i == self.temperatures.len() - 1 {
                 return dr;
@@ -755,6 +789,6 @@ impl SpeechRecognitionDecoder for Decoder {
     }
 
     fn segments(&mut self, mel: &Tensor) -> InferenceResult<Vec<proto::Segment>> {
-        self.bulk_segments(mel)
+        self.segments2(mel)
     }
 }

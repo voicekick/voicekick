@@ -206,6 +206,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bstr"
+version = "1.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a68f1f47cdf0ec8ee4b941b2eee2a80cb796db73118c0dd09ac63fbe405be22"
+dependencies = [
+ "memchr",
+ "regex-automata 0.4.8",
+ "serde",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -245,9 +256,9 @@ checksum = "9ac0150caa2ae65ca5bd83f25c7de183dea78d4d366469f148435e2acfbad0da"
 
 [[package]]
 name = "candle-core"
-version = "0.7.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e1a39b963e261c58017edf2007e5b63425ad21538aaaf51fe23d1da41703701"
+checksum = "e61e6a12c4b0660f105c11cbce42a5b33a392e73caaf465261b24210878fbe0e"
 dependencies = [
  "accelerate-src",
  "byteorder",
@@ -256,7 +267,7 @@ dependencies = [
  "half",
  "libc",
  "memmap2",
- "metal",
+ "metal 0.27.0",
  "num-traits",
  "num_cpus",
  "rand",
@@ -264,17 +275,19 @@ dependencies = [
  "rayon",
  "safetensors",
  "thiserror",
+ "ug",
+ "ug-metal",
  "yoke",
  "zip 1.1.4",
 ]
 
 [[package]]
 name = "candle-metal-kernels"
-version = "0.7.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "166a92826d615d98b205e346e52128fa0439f2ab3302587403fdc558b4219e19"
+checksum = "b2db22aa60f6927d706fa8df2dabe5c7ca2919ba056c69c0c94aa6bdb5ca31c9"
 dependencies = [
- "metal",
+ "metal 0.27.0",
  "once_cell",
  "thiserror",
  "tracing",
@@ -282,15 +295,15 @@ dependencies = [
 
 [[package]]
 name = "candle-nn"
-version = "0.7.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "898f8d21b8bdf559a1c8635e2db8386b2134015cd3003c18c1a30a22a67daec6"
+checksum = "2032a3a41999801c5997ee7896ce816c361c49988435dedb7830634293c0798e"
 dependencies = [
  "accelerate-src",
  "candle-core",
  "candle-metal-kernels",
  "half",
- "metal",
+ "metal 0.27.0",
  "num-traits",
  "rayon",
  "safetensors",
@@ -300,9 +313,9 @@ dependencies = [
 
 [[package]]
 name = "candle-transformers"
-version = "0.7.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06b8a130a8ac1d1e20696d89f7a52948902e037ad0eec085fceb77021007cfee"
+checksum = "b88bf4dbf13c3fa0a51624e4a2bf4db1d97596bbefd471424892a0b852013b7c"
 dependencies = [
  "accelerate-src",
  "byteorder",
@@ -1217,6 +1230,7 @@ name = "inference-candle"
 version = "0.1.0"
 dependencies = [
  "candle-core",
+ "tracing",
 ]
 
 [[package]]
@@ -1480,6 +1494,21 @@ name = "metal"
 version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c43f73953f8cbe511f021b58f18c3ce1c3d1ae13fe953293e13345bf83217f25"
+dependencies = [
+ "bitflags 2.6.0",
+ "block",
+ "core-graphics-types",
+ "foreign-types 0.5.0",
+ "log",
+ "objc",
+ "paste",
+]
+
+[[package]]
+name = "metal"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ecfd3296f8c56b7c1f6fbac3c71cefa9d78ce009850c45000015f206dc7fa21"
 dependencies = [
  "bitflags 2.6.0",
  "block",
@@ -2529,6 +2558,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 
 [[package]]
+name = "similar"
+version = "2.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1de1d4f81173b03af4c0cbed3c898f6bff5b870e4a7f5d6f4057d62a7a4b686e"
+dependencies = [
+ "bstr",
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "similar-asserts"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfe85670573cd6f0fa97940f26e7e6601213c3b0555246c24234131f88c5709e"
+dependencies = [
+ "console",
+ "similar",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3021,6 +3070,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2896d95c02a80c6d6a5d6e953d479f5ddf2dfdb6a244441010e373ac0fb88971"
 
 [[package]]
+name = "ug"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4eef2ebfc18c67a6dbcacd9d8a4d85e0568cc58c82515552382312c2730ea13"
+dependencies = [
+ "half",
+ "num",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "ug-metal"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e4ed1df2c20a1a138f993041f650cc84ff27aaefb4342b7f986e77d00e80799"
+dependencies = [
+ "half",
+ "metal 0.29.0",
+ "objc",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "ug",
+]
+
+[[package]]
 name = "unicode-bidi"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3150,6 +3227,7 @@ dependencies = [
  "inference-candle",
  "mel_spec",
  "ringbuf",
+ "similar-asserts",
  "symphonia",
  "symphonia-core",
  "tokio",
@@ -3173,6 +3251,7 @@ dependencies = [
  "rand",
  "serde_json",
  "tokenizers",
+ "tracing",
 ]
 
 [[package]]
