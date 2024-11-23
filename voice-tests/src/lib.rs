@@ -33,19 +33,19 @@ pub fn read_voice_dataset_wav_into_samples(path: &str) -> (Vec<f32>, CodecParame
 pub fn read_wav_into_samples(path: &str) -> (Vec<f32>, CodecParameters) {
     let (samples, codec_params) = pcm_decode(path).expect("Failed to decode PCM");
 
-    let sample_rate = codec_params.sample_rate.unwrap_or(0) as usize;
-    let channels = codec_params
-        .channels
-        .map(|channels| channels.count())
-        .unwrap_or(1);
+    // let sample_rate = codec_params.sample_rate.unwrap_or(0) as usize;
+    // let channels = codec_params
+    //     .channels
+    //     .map(|channels| channels.count())
+    //     .unwrap_or(1);
 
-    println!(
-        "READ samples {} file '{}' sample rate {} channels {}",
-        samples.len(),
-        path,
-        sample_rate,
-        channels,
-    );
+    // println!(
+    //     "READ samples {} file '{}' sample rate {} channels {}",
+    //     samples.len(),
+    //     path,
+    //     sample_rate,
+    //     channels,
+    // );
 
     (samples, codec_params)
 }
@@ -66,16 +66,16 @@ pub fn preprocess_samples(
     )
     .expect("Failed to create Resampler");
 
-    let before = samples.len();
+    // let before = samples.len();
     let samples = resampler.process(&samples);
-    let after = samples.len();
+    // let after = samples.len();
 
-    println!(
-        "PREPROCESS RATIO {:.1} samples {} -> {}",
-        after as f32 / before as f32,
-        before,
-        after
-    );
+    // println!(
+    //     "PREPROCESS RATIO {:.1} samples {} -> {}",
+    //     after as f32 / before as f32,
+    //     before,
+    //     after
+    // );
 
     samples
 }

@@ -1,5 +1,6 @@
 # Voice Whisper model
 
+# Total expectations: 105
 cargo test test_triage_voice_commands_whisper_english_models
 (
     (
