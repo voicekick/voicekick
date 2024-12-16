@@ -1,4 +1,7 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use candle_core::{Device, IndexOp, Shape, Tensor};
 use candle_nn::{ops::softmax, VarBuilder};
@@ -17,6 +20,8 @@ use tracing::debug;
 
 mod audio;
 mod multilingual;
+
+const ZERO: f32 = 0.0;
 
 pub mod audio_params {
     // Sample rate
@@ -287,6 +292,7 @@ pub struct Decoder {
     language_token: Option<u32>,
 
     boost_tokens: Vec<u32>,
+    command_tokens: Vec<u32>,
     penalty_tokens: Vec<u32>,
 
     temperatures: Vec<f64>,
@@ -319,7 +325,7 @@ impl Decoder {
                 if model.config().suppress_tokens.contains(&i) || i == no_timestamps_token {
                     f32::NEG_INFINITY
                 } else {
-                    0f32
+                    ZERO
                 }
             })
             .collect();
@@ -353,7 +359,7 @@ impl Decoder {
             128 => include_bytes!("melfilters128.bytes").as_slice(),
             nmel => panic!("unexpected num_mel_bins {nmel}"),
         };
-        let mut mel_filters = vec![0f32; mel_bytes.len() / 4];
+        let mut mel_filters = vec![ZERO; mel_bytes.len() / 4];
         <byteorder::LittleEndian as byteorder::ByteOrder>::read_f32_into(
             mel_bytes,
             &mut mel_filters,
@@ -366,6 +372,16 @@ impl Decoder {
             &[
                 "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
                 "ten",
+            ],
+        );
+
+        let command_tokens = vector_into_tokens(
+            &tokenizer,
+            &[
+                // "four", "off", "forward", "five", "on", "yes", "six", "down", "house", "two",
+                // "marvin", "visual", "up", "seven", "zero", "bird", "one", "sheila", "three",
+                // "stop", "left", "nine", "follow", "wow", "no", "dog", "go", "happy", "bed", "tree",
+                // "learn", "backward", "cat", "eight", "right",
             ],
         );
 
@@ -396,6 +412,7 @@ impl Decoder {
             suppress_tokens,
             sot_token,
             transcribe_token,
+            command_tokens,
             eot_token,
             space_token,
             no_speech_token,
@@ -434,69 +451,135 @@ impl Decoder {
 
         self.segments(&mel)
     }
+
+    fn special_tokens(&self) -> [u32; 4] {
+        [
+            self.sot_token,
+            self.transcribe_token,
+            self.no_timestamps_token,
+            self.space_token,
+        ]
+    }
+
+    fn is_special_token(&self, token: u32) -> bool {
+        self.special_tokens().contains(&token)
+    }
 }
 
 impl SpeechRecognitionDecoder for Decoder {
-    fn decode(&mut self, mel: &Tensor, t: f64) -> InferenceResult<proto::DecodingResult> {
+    fn decode(&mut self, mel: &Tensor, temperature: f64) -> InferenceResult<proto::DecodingResult> {
+        let special_tokens = self.special_tokens();
+
+        // 1. Initial setup
         let model = &mut self.model;
         let audio_features = model.encoder_forward(mel, true)?;
         let sample_len = model.config().max_target_positions / 2;
-        let mut sum_logprob = 0f64;
+        let mut sum_logprob: f64 = 0.0;
         let mut no_speech_prob = f64::NAN;
-        let mut tokens = vec![self.sot_token];
 
         // Track token frequencies for repetition penalty
         let mut token_frequencies: HashMap<u32, usize> = HashMap::new();
-        let repetition_penalty = 1.2; // Adjust this value to control penalty strength
+        let repetition_penalty: f32 = 4.2; // Adjust this value to control penalty strength
+        let repetition_frequency = 3; // Adjust this value to control how many times a token must appear before penalty is applied
 
-        // Initialize suppress mask
-        let mut suppress_mask = self.suppress_tokens.clone();
-        for &token in &self.penalty_tokens {
-            if token < suppress_mask.dims1()? as u32 {
-                suppress_mask = suppress_mask.slice_assign(
+        let mut inc_freq = |token: u32| {
+            *token_frequencies.entry(token).or_insert(0) += 1;
+        };
+
+        // Create boost mask
+        let boost_value = 2.0f32; // Adjust this value to control how much we favor word numbers
+
+        let command_boost_value = 3.0f32; // Adjust this value to control how much we favor commands
+
+        // 2. Token tracking
+        let mut seen_tokens: HashSet<u32> = HashSet::new();
+        let mut word_tokens = 0;
+        let max_word_tokens = 1;
+
+        // 3. Create initial token sequence
+        // The tokens must be in a specific sequence that matches how the model was trained:
+        // - Start with SOT token
+        // - Language token (if multilingual model)
+        // - Task token (transcribe)
+        // - Settings tokens (notimestamps)
+        let mut tokens = vec![self.sot_token];
+        inc_freq(self.sot_token);
+
+        if let Some(language_token) = self.language_token {
+            tokens.push(language_token);
+            inc_freq(language_token);
+        }
+        tokens.push(self.transcribe_token);
+        inc_freq(self.transcribe_token);
+        tokens.push(self.no_timestamps_token);
+        inc_freq(self.no_timestamps_token);
+
+        // 4. Create combined mask once (not repeatedly)
+        let mask = {
+            let mut m = self.suppress_tokens.clone();
+            let dims1: u32 = m.dims1()? as u32;
+
+            // Suppress space token always
+            // TODO: questionable
+            m = m.slice_assign(
+                &[self.space_token as usize..=self.space_token as usize],
+                &Tensor::new(&[-f32::INFINITY], mel.device())?,
+            )?;
+
+            // Penalties
+            for &token in self.penalty_tokens.iter().filter(|t| *t < &dims1) {
+                m = m.slice_assign(
                     &[token as usize..=token as usize],
                     &Tensor::new(&[-f32::INFINITY], mel.device())?,
                 )?;
             }
-        }
 
-        // Create boost mask
-        let boost_value = 5.0f32; // Adjust this value to control how much we favor word numbers
-        for &token in self.boost_tokens.iter() {
-            if token < suppress_mask.dims1()? as u32 {
-                suppress_mask = suppress_mask.slice_assign(
+            // Apply boosts
+            for &token in self.boost_tokens.iter().filter(|t| *t < &dims1) {
+                m = m.slice_assign(
                     &[token as usize..=token as usize],
                     &Tensor::new(&[boost_value], mel.device())?,
                 )?;
             }
-        }
 
-        if let Some(language_token) = self.language_token {
-            tokens.push(language_token);
-            *token_frequencies.entry(language_token).or_insert(0) += 1;
-        }
-        tokens.push(self.transcribe_token);
-        tokens.push(self.no_timestamps_token);
-
-        // Initialize frequencies for initial tokens
-        *token_frequencies.entry(self.transcribe_token).or_insert(0) += 1;
-        *token_frequencies
-            .entry(self.no_timestamps_token)
-            .or_insert(0) += 1;
-
-        for i in 0..sample_len {
-            if i == 0 {
-                // Only penalize space at the beginning
-                suppress_mask = suppress_mask.slice_assign(
-                    &[self.space_token as usize..=self.space_token as usize],
-                    &Tensor::new(&[-f32::INFINITY], mel.device())?,
+            // Commands boost
+            for &token in self.command_tokens.iter().filter(|t| *t < &dims1) {
+                m = m.slice_assign(
+                    &[token as usize..=token as usize],
+                    &Tensor::new(&[command_boost_value], mel.device())?,
                 )?;
             }
 
+            m
+        };
+
+        println!("sample_len {}", sample_len);
+
+        // 5. Main decoding loop
+        for i in 0..sample_len {
+            // Reduced for speech commands
+            // Get next token logits
             let tokens_t = Tensor::new(tokens.as_slice(), mel.device())?;
             let tokens_t = tokens_t.unsqueeze(0)?;
             let ys = model.decoder_forward(&tokens_t, &audio_features, i == 0)?;
 
+            println!(
+                "token_frequencies {:?} seen_tokens {:?} word_tokens {}",
+                token_frequencies
+                    .iter()
+                    .map(|(k, v)| {
+                        let kk = self
+                            .tokenizer
+                            .decode(&[*k], true)
+                            .unwrap_or_else(|_| format!("{}", k));
+                        format!("{}:{}", kk, v)
+                    })
+                    .collect::<Vec<String>>(),
+                seen_tokens,
+                word_tokens
+            );
+
+            // Handle first iteration special cases
             if i == 0 {
                 let logits = model.decoder_final_linear(&ys.i(..1)?)?.i(0)?.i(0)?;
                 no_speech_prob = softmax(&logits, 0)?
@@ -510,29 +593,65 @@ impl SpeechRecognitionDecoder for Decoder {
                 .i(0)?
                 .i(0)?;
 
-            // Apply repetition penalty
+            // Apply repetition penalty using token frequencies
             let mut logits_vec: Vec<f32> = logits.to_vec1()?;
+
+            // for (token, frequency) in &token_frequencies {
+            //     if *frequency > repetition_frequency {
+            //         // Instead of repetition_frequency
+            //         let token_idx = *token as usize;
+
+            //         if let Some(last_token) = tokens.last() {
+            //             println!(
+            //                 "Last token {} token {} frequency {}",
+            //                 last_token, token, frequency
+            //             );
+            //         }
+
+            //         // TODO: apply penalty only to the tokens repeating last token
+            //         if token_idx < logits_vec.len() {
+            //             let penalty = repetition_penalty.powi(*frequency as i32);
+            //             logits_vec[token_idx] = if logits_vec[token_idx] < ZERO {
+            //                 logits_vec[token_idx] * penalty as f32
+            //             } else {
+            //                 logits_vec[token_idx] / penalty as f32
+            //             };
+            //         }
+            //     }
+            // }
+            // Apply repetition penalty only for tokens that repeat the last token
+            let last_two_tokens = tokens
+                .get(tokens.len().saturating_sub(2 + special_tokens.len())..)
+                .unwrap_or(&[])
+                .into_iter()
+                .filter(|&t| !special_tokens.contains(t))
+                .rev()
+                .take(2)
+                .collect::<Vec<_>>();
+
             for (token, frequency) in &token_frequencies {
-                if *frequency > 1 {
+                // Only penalize if this token matches the last token and has been used
+                if last_two_tokens.contains(&token) || *frequency > repetition_frequency {
                     let token_idx = *token as usize;
                     if token_idx < logits_vec.len() {
-                        // Penalize tokens that have appeared before
-                        logits_vec[token_idx] = if logits_vec[token_idx] < 0.0 {
-                            logits_vec[token_idx] * repetition_penalty as f32
+                        // Strong penalty for immediate repetition
+                        let penalty = repetition_penalty.powi(*frequency as i32);
+                        logits_vec[token_idx] = if logits_vec[token_idx] < ZERO {
+                            logits_vec[token_idx] * penalty as f32
                         } else {
-                            logits_vec[token_idx] / repetition_penalty as f32
+                            logits_vec[token_idx] / penalty as f32
                         };
                     }
                 }
             }
 
-            // Convert back to tensor and apply suppression
+            // Convert back and apply mask
             logits = Tensor::new(logits_vec.as_slice(), mel.device())?;
-            logits = logits.broadcast_add(&suppress_mask)?;
+            logits = logits.broadcast_add(&mask)?;
 
-            let next_token = if t > 0f64 {
-                let effective_temp = t.min(0.7); // Cap temperature for stability
-                let prs = softmax(&(&logits / effective_temp)?, 0)?;
+            // Get next token
+            let next_token = if temperature > 0f64 {
+                let prs = softmax(&(&logits / temperature)?, 0)?;
                 let logits_v: Vec<f32> = prs.to_vec1()?;
                 logits_v
                     .iter()
@@ -550,26 +669,33 @@ impl SpeechRecognitionDecoder for Decoder {
                     .unwrap()
             };
 
-            // Only add token if it's not a penalty token
+            // Check stopping conditions first
+            if next_token == self.eot_token
+            // || word_tokens >= max_word_tokens
+            // || seen_tokens.contains(&next_token)
+            {
+                break;
+            }
+
+            // Add token if valid
             if !self.penalty_tokens.contains(&next_token) {
-                // Update token frequency before adding
-                *token_frequencies.entry(next_token).or_insert(0) += 1;
                 tokens.push(next_token);
+                seen_tokens.insert(next_token);
+                word_tokens += 1;
+                *token_frequencies.entry(next_token).or_insert(0) += 1; // Add this line
 
                 let prob = softmax(&logits, candle_core::D::Minus1)?
                     .i(next_token as usize)?
                     .to_scalar::<f32>()? as f64;
-
-                if next_token == self.eot_token
-                    || tokens.len() > model.config().max_target_positions
-                {
-                    break;
-                }
                 sum_logprob += prob.ln();
+            } else {
+                println!("Skipping penalty token {next_token}");
             }
         }
 
+        // 6. Final processing
         let text = self.tokenizer.decode(&tokens, true)?.trim().to_lowercase();
+        println!("Token {:?} decoded to text: {}", tokens, text);
         let avg_logprob = sum_logprob / tokens.len() as f64;
 
         Ok(DecodingResult {
@@ -577,7 +703,7 @@ impl SpeechRecognitionDecoder for Decoder {
             text,
             avg_logprob,
             no_speech_prob,
-            temperature: t,
+            temperature,
             compression_ratio: None,
         })
     }
@@ -586,7 +712,7 @@ impl SpeechRecognitionDecoder for Decoder {
         for (i, &t) in self.temperatures.clone().iter().enumerate() {
             let dr: InferenceResult<DecodingResult> = self.decode(segment, t);
 
-            println!("Decoding with temperature {t}: {dr:?}");
+            debug!("Decoding with temperature {t}: {dr:?}");
 
             if i == self.temperatures.len() - 1 {
                 return dr;

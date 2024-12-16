@@ -48,10 +48,7 @@ async fn test_whisper_voice_dataset_harvard_list_01() {
     .collect::<Vec<&str>>()
     .join(" ");
 
-    let models = vec![
-        // WhichModel::TinyEn,
-        WhichModel::BaseEn,
-    ];
+    let models = vec![WhichModel::BaseEn];
 
     for model in models {
         let mut whisper = voice_whisper::new(model, None).unwrap();
