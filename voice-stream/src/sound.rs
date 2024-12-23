@@ -1,5 +1,6 @@
 use crate::{
-    traits::IntoF32, voice::VoiceDetection, InputSoundSender, Resampler, VoiceInputResult,
+    sample_to_f32, traits::IntoF32, voice::VoiceDetection, InputSoundSender, Resampler,
+    VoiceInputResult,
 };
 
 /// Sound stream with VAD
@@ -36,12 +37,14 @@ impl SoundStream {
         })
     }
 
-    pub(crate) fn process_input_data<T>(&mut self, input: &[T], sender: &InputSoundSender)
+    pub(crate) fn process_input_data<T>(&mut self, raw_input: &[T], sender: &InputSoundSender)
     where
         T: cpal::Sample + IntoF32,
     {
+        let input = sample_to_f32(raw_input);
+
         // Pre-process the incoming audio samples by converting to f32,
-        let samples = self.resampler.process(input);
+        let samples = self.resampler.process(&input);
 
         self.buffer.extend(samples);
 
