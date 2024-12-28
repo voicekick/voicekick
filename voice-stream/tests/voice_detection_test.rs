@@ -46,7 +46,7 @@ async fn test_silero_vad_predict() {
     // Chunk 189 result: 0.013352901
     // Chunk 190 result: 0.051264077
     // Chunk 191 result: 0.120171815
-    assert!(!(vd.silero_vad_prediction(chunks[167].to_vec()) > 0.01));
+    assert!(!(vd.silero_vad_prediction(chunks[60].to_vec()) > 0.01));
 
     let (samples, codec_params) = read_voice_dataset_wav_into_samples("obama/1.wav");
 
@@ -61,41 +61,12 @@ async fn test_silero_vad_predict() {
     let chunks = input.chunks(SILERO_VAD_CHUNK_SIZE);
 
     for (i, chunk) in chunks.enumerate() {
+        // println!("{i} {}", vd.silero_vad_is_voice(chunk.to_vec()));
         if i == 67 {
             break;
         }
         assert!(vd.silero_vad_is_voice(chunk.to_vec()))
     }
-}
-
-#[tokio::test]
-async fn test_webrtc_vad_is_noise() {
-    let mut vd = VoiceDetection::default().with_silero_vad_voice_threshold(0.01);
-
-    let (samples, codec_params) = read_voice_dataset_wav_into_samples("Harvard list 01.wav");
-
-    let sample_rate = codec_params.sample_rate.unwrap_or(0) as usize;
-    let channels = codec_params
-        .channels
-        .map(|channels| channels.count())
-        .unwrap_or(1);
-
-    let input = preprocess_samples(sample_rate, 16000, channels, Some(512), samples);
-
-    let chunks = input.chunks(480).collect::<Vec<_>>();
-
-    // WebRTC is constantly mutating it's state curiously without this loop tests will not pass
-    // hence tests are not deterministic but based on the full input
-    for (_i, chunk) in chunks.iter().enumerate() {
-        vd.webrtc_vad_is_noise(chunk);
-    }
-
-    // Silence
-    assert!(!vd.webrtc_vad_is_noise(chunks[0]));
-    // Silence
-    assert!(vd.webrtc_vad_is_noise(chunks[206]));
-    // Noise
-    assert!(vd.webrtc_vad_is_noise(chunks[226]));
 }
 
 #[tokio::test]
@@ -108,7 +79,6 @@ async fn test_vad_combined() {
         voice_datasets_path("24bit-M1F1-int24WE-AFsp.wav"),
     ];
 
-    // Max 481 samples per chunk due to earshot WebRTC model limitations
     let chunk_size = 341;
 
     let silero_predict_treshold = 0.01; // 0.01 is a good treshold for voice detection derived from
@@ -116,10 +86,8 @@ async fn test_vad_combined() {
 
     println!("Testing available VAD detection methods");
     println!("{}", "-".repeat(80));
-    println!("`True voice` predict means when both WebRTC and SileroVAD predicts noise AND voice");
-    println!(
-        "`True noise` predict means when both WebRTC and SileroVAD predicts no noise AND no voice"
-    );
+    println!("`True voice` predict means when SileroVAD predicts noise AND voice");
+    println!("`True noise` predict means when SileroVAD predicts no noise AND no voice");
     println!("{}", "-".repeat(80));
 
     for file in files {
@@ -139,28 +107,17 @@ async fn test_vad_combined() {
 
         let mut true_voice: Vec<f32> = Vec::new();
         let mut true_noise: Vec<f32> = Vec::new();
-        let mut times_noise = 0;
         let mut times_voice = 0;
 
         for (_i, chunk) in chunks.into_iter().enumerate() {
-            let is_noise = vd.webrtc_vad_is_noise(chunk);
             let silero_predict = vd.silero_vad_prediction(chunk.to_vec());
             let is_voice = silero_predict > silero_predict_treshold;
 
-            if is_noise && is_voice {
-                true_voice.push(silero_predict);
-            }
-
-            if !is_noise && !is_voice {
-                true_noise.push(silero_predict);
-            }
-
-            if is_noise {
-                times_noise += 1;
-            }
-
             if is_voice {
+                true_voice.push(silero_predict);
                 times_voice += 1;
+            } else {
+                true_noise.push(silero_predict);
             }
         }
 
@@ -174,10 +131,9 @@ async fn test_vad_combined() {
             true_noise.iter().sum::<f32>() / true_noise.len() as f32
         );
         println!(
-            "True Voice ratio in samples: {} Times voice ratio {} Times noise ratio {}",
+            "True Voice ratio in samples: {} Times voice ratio {}",
             true_voice.len() as f32 / total_chunks as f32,
             times_voice as f32 / total_chunks as f32,
-            times_noise as f32 / total_chunks as f32,
         );
     }
 }

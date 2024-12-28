@@ -3,14 +3,13 @@ use crate::{
     VoiceInputResult,
 };
 
-/// Sound stream with VAD
 pub(crate) struct SoundStream {
-    buffer: Vec<f32>,
+    input_buffer: Vec<f32>,
+    output_buffer: Vec<f32>,
     buffer_size: usize,
-
     resampler: Resampler,
-
     voice_detection: VoiceDetection,
+    channels: usize,
 }
 
 impl SoundStream {
@@ -24,16 +23,17 @@ impl SoundStream {
         let resampler = Resampler::new(
             incoming_sample_rate as f64,
             outgoing_sample_rate as f64,
-            Some(1024),
+            Some(buffer_size),
             channels,
         )?;
 
         Ok(Self {
-            buffer: Vec::with_capacity(buffer_size),
+            input_buffer: Vec::with_capacity(buffer_size),
+            output_buffer: Vec::with_capacity(buffer_size),
             buffer_size,
-
             resampler,
             voice_detection,
+            channels,
         })
     }
 
@@ -43,18 +43,43 @@ impl SoundStream {
     {
         let input = sample_to_f32(raw_input);
 
-        // Pre-process the incoming audio samples by converting to f32,
-        let samples = self.resampler.process(&input);
+        // If input is much larger than our buffer size, process it in larger chunks
+        if input.len() > self.buffer_size * 10 {
+            // Arbitrary threshold for "bulk" processing
+            let chunk_size = self.buffer_size * self.channels;
+            for chunk in input.chunks(chunk_size) {
+                let resampled = self.resampler.process(chunk);
 
-        self.buffer.extend(samples);
+                for voice_chunk in resampled.chunks(self.buffer_size) {
+                    if let Some(detected_voice) =
+                        self.voice_detection.add_samples(voice_chunk.to_vec())
+                    {
+                        if let Err(e) = sender.send(detected_voice) {
+                            eprintln!("Failed to send voice data: {:?}", e);
+                        }
+                    }
+                }
+            }
+        } else {
+            // Standard streaming process for smaller chunks
+            self.input_buffer.extend(input);
 
-        if self.buffer.len() >= self.buffer_size {
-            let buffer = self.buffer.split_off(0);
+            while self.input_buffer.len() >= self.buffer_size * self.channels {
+                let chunk: Vec<_> = self
+                    .input_buffer
+                    .drain(..self.buffer_size * self.channels)
+                    .collect();
+                let resampled = self.resampler.process(&chunk);
+                self.output_buffer.extend(resampled);
 
-            if let Some(voice_buffer) = self.voice_detection.add_samples(buffer) {
-                // TODO: improve error handling
-                if let Err(e) = sender.send(voice_buffer) {
-                    eprintln!("Failed to send voice data to channel: {:?}", e);
+                while self.output_buffer.len() >= self.buffer_size {
+                    let voice_chunk: Vec<_> =
+                        self.output_buffer.drain(..self.buffer_size).collect();
+                    if let Some(detected_voice) = self.voice_detection.add_samples(voice_chunk) {
+                        if let Err(e) = sender.send(detected_voice) {
+                            eprintln!("Failed to send voice data: {:?}", e);
+                        }
+                    }
                 }
             }
         }

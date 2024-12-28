@@ -4,7 +4,7 @@ version = "0.3.0"
 edition = "2021"
 description = """
 Voice stream is a real-time audio stream processing with voice activity detection.
-This library provides a high-level interface for capturing audio input, performing voice detection using both WebRTC VAD and Silero VAD, and processing audio streams.
+This library provides a high-level interface for capturing audio input, performing voice detection using Silero VAD, and processing audio streams.
 """
 
 homepage = "https://github.com/voicekick/voicekick"
@@ -18,7 +18,6 @@ linux = ["cpal/jack"]
 
 [dependencies]
 cpal = { version = "0.15", default-features = false, features = [] }
-earshot = "0.1.0"
 rubato = { version = "0.16", default-features = false, features = ["fft_resampler"] }
 tracing = { workspace = true }
 voice_activity_detector = "0.1"

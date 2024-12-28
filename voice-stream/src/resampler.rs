@@ -1,17 +1,16 @@
-use rubato::{make_buffer, FastFixedIn, Resampler as _, SincFixedIn, SincFixedOut};
-use tracing::debug;
+use rubato::{FastFixedIn, Resampler as _};
+use tracing::{debug, error};
 
 use crate::VoiceInputResult;
 
 /// Resampler for audio samples
 /// - default polynomial degree: Septic
 /// - default max_resample_ratio_relative: 10.0
-/// - default chunk_size: 1024
+/// - default chunk_size: 512
 pub struct Resampler {
     channels: usize,
 
-    resampler: SincFixedOut<f32>,
-    resampler_chunk_size: usize,
+    resampler: FastFixedIn<f32>,
     resample_ratio: f64,
 }
 
@@ -22,35 +21,19 @@ impl Resampler {
         chunk_size: Option<usize>,
         channels: usize,
     ) -> VoiceInputResult<Self> {
-        // Correct ratio for downsampling (high rate to low rate)
         let resample_ratio = output_sample_ratio / input_sample_ratio;
-
-        let max_resample_ratio_relative = 1.1;
-
-        let resampler_chunk_size = chunk_size.unwrap_or(1024);
+        let resampler_chunk_size = chunk_size.unwrap_or(512);
 
         debug!(
             "Creating resampler: input rate = {}, output rate = {}, ratio = {}",
             input_sample_ratio, output_sample_ratio, resample_ratio
         );
 
-        let sinc_len = 128;
-        let window = rubato::WindowFunction::Blackman2;
-        let f_cutoff = rubato::calculate_cutoff(sinc_len, window);
-
-        // Adjusted parameters for more precise resampling
-        let params = rubato::SincInterpolationParameters {
-            sinc_len,
-            f_cutoff,
-            interpolation: rubato::SincInterpolationType::Cubic,
-            oversampling_factor: 512,
-            window,
-        };
-
-        let resampler = SincFixedOut::<f32>::new(
+        // Use FastFixedIn for better real-time performance
+        let resampler = FastFixedIn::<f32>::new(
             resample_ratio,
-            max_resample_ratio_relative,
-            params,
+            1.1,
+            rubato::PolynomialDegree::Septic, // Higher quality interpolation
             resampler_chunk_size,
             channels,
         )?;
@@ -64,91 +47,60 @@ impl Resampler {
         Ok(Self {
             channels,
             resampler,
-            resampler_chunk_size,
             resample_ratio,
         })
     }
 
+    // In Resampler, just do sample rate conversion
     pub fn process(&mut self, input: &[f32]) -> Vec<f32> {
         if input.is_empty() {
             return Vec::new();
         }
 
-        // Early return if no resampling needed
-        if self.resample_ratio == 1.0 && self.channels == 1 {
+        if self.resample_ratio == 1.0 {
             return input.to_vec();
         }
 
-        debug!("Input samples: {}", input.len());
-
-        // Create separate channel vectors
-        let mut indata: Vec<Vec<f32>> = vec![Vec::new(); self.channels];
         let frames = input.len() / self.channels;
+        let required_frames = self.resampler.input_frames_next();
 
-        debug!("Input frames per channel: {}", frames);
+        // Create channel buffers with required size, zero-padded
+        let mut indata: Vec<Vec<f32>> = vec![vec![0.0; required_frames]; self.channels];
 
-        // Fill channel vectors
+        // Fill with actual data
         for frame in 0..frames {
             for ch in 0..self.channels {
                 let idx = frame * self.channels + ch;
-                indata[ch].push(input[idx]);
+                if frame < required_frames {
+                    indata[ch][frame] = input[idx];
+                }
             }
         }
 
-        // Create output buffer with enough capacity
-        let out_frames = (frames as f64 * self.resample_ratio).ceil() as usize;
-        let mut outdata = vec![Vec::with_capacity(out_frames); self.channels];
-
-        // Create slices for input
-        let mut indata_slices: Vec<&[f32]> = indata.iter().map(|v| v.as_slice()).collect();
-
-        // Create output buffer for processing
-        let mut outbuffer = vec![vec![0.0f32; self.resampler.output_frames_max()]; self.channels];
-        let mut input_frames_next = self.resampler.input_frames_next();
-
-        // Process full chunks
         let mut output = Vec::new();
+        let indata_slices: Vec<&[f32]> = indata.iter().map(|v| v.as_slice()).collect();
+        let mut outbuffer = vec![vec![0.0f32; self.resampler.output_frames_max()]; self.channels];
 
-        while indata_slices[0].len() >= input_frames_next {
-            if let Ok((nbr_in, nbr_out)) =
-                self.resampler
-                    .process_into_buffer(&indata_slices, &mut outbuffer, None)
-            {
-                // Append the processed frames
-                for ch in 0..self.channels {
-                    outdata[ch].extend_from_slice(&outbuffer[ch][..nbr_out]);
-                }
-                // Update the input slices
-                for ch in 0..self.channels {
-                    indata_slices[ch] = &indata_slices[ch][nbr_in..];
-                }
-            }
-            input_frames_next = self.resampler.input_frames_next();
-        }
+        // Process chunk
+        match self
+            .resampler
+            .process_into_buffer(&indata_slices, &mut outbuffer, None)
+        {
+            Ok((_, nbr_out)) => {
+                // Only take the number of frames corresponding to our input
+                let output_frames = ((frames as f64 * self.resample_ratio) as usize).min(nbr_out);
 
-        // Process remaining samples if any
-        if !indata_slices[0].is_empty() {
-            if let Ok((_nbr_in, nbr_out)) = self.resampler.process_partial_into_buffer(
-                Some(&indata_slices),
-                &mut outbuffer,
-                None,
-            ) {
-                for ch in 0..self.channels {
-                    outdata[ch].extend_from_slice(&outbuffer[ch][..nbr_out]);
+                // Keep original channel format
+                for frame in 0..output_frames {
+                    for ch in 0..self.channels {
+                        output.push(outbuffer[ch][frame]);
+                    }
                 }
             }
-        }
-
-        // Convert channel buffers back to interleaved format
-        let out_frames = outdata[0].len();
-        for frame in 0..out_frames {
-            for ch in 0..self.channels {
-                output.push(outdata[ch][frame]);
+            Err(e) => {
+                error!("Error processing buffer: {:?}", e);
             }
         }
-
-        debug!("Output frames per channel: {}", outdata[0].len());
-        debug!("Total output samples: {}", output.len());
 
         output
     }
@@ -203,8 +155,8 @@ mod tests {
     }
 
     #[test]
-    fn test_resampler_process_when_resample_ratio_is_one_and_two_channels() {
-        let mut resampler = Resampler::new(16000.0, 16000.0, Some(4), 2).unwrap();
+    fn test_resampler_process_when_resample_ratio_is_same_and_one_channel() {
+        let mut resampler = Resampler::new(16000.0, 16000.0, Some(4), 1).unwrap();
 
         let input = vec![
             1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0,
@@ -215,7 +167,56 @@ mod tests {
         assert_eq!(
             output,
             vec![
-                1.3045013, 2.2875674, 2.641381, 3.6544528, 5.425432, 6.4173446, 6.5281663, 7.530723
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0,
+                16.0
+            ]
+        );
+    }
+
+    #[test]
+    fn test_resampler_process_when_resample_ratio_is_higher_and_two_channels() {
+        let mut resampler = Resampler::new(16000.0, 24000.0, Some(512), 2).unwrap();
+
+        let input = vec![
+            1.0, 2.0, // Frame 1: left=1.0, right=2.0
+            3.0, 4.0, // Frame 2: left=3.0, right=4.0
+            5.0, 6.0, // Frame 3: left=5.0, right=6.0
+            7.0, 8.0, // Frame 4: left=7.0, right=8.0
+            9.0, 10.0, // Frame 5: left=9.0, right=10.0
+            11.0, 12.0, // Frame 6: left=11.0, right=12.0
+            13.0, 14.0, // Frame 7: left=13.0, right=14.0
+            15.0, 16.0, // Frame 8: left=15.0, right=16.0
+        ];
+
+        let output = resampler.process(&input);
+
+        assert_eq!(
+            output,
+            vec![
+                -0.0022354315,
+                -0.004470863,
+                0.013463395,
+                0.030991213,
+                0.0,
+                0.0,
+                -0.061474368,
+                -0.15871564,
+                0.19311081,
+                0.507951,
+                1.0,
+                2.0,
+                2.2879643,
+                3.3643246,
+                3.6823146,
+                4.6621957,
+                5.0,
+                6.0,
+                6.331301,
+                7.3333335,
+                7.666667,
+                8.666667,
+                9.0,
+                10.0
             ]
         );
     }

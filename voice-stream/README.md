@@ -2,14 +2,13 @@
 
 A Rust library for real-time voice activity detection and audio stream processing.
 This library provides a high-level interface for capturing audio input,
-performing voice detection using both WebRTC VAD and Silero VAD, and processing audio streams.
+performing voice detection using Silero VAD, and processing audio streams.
 
 ## Features
 
 - Real-time audio capture from input devices
 - Audio resampling to desired sample rate (default 16kHz)
-- Dual voice activity detection using:
-  - WebRTC VAD
+- Voice activity detection using:
   - Silero VAD
 - Configurable buffer sizes and voice detection parameters
 - Channel-based audio data transmission
@@ -60,9 +59,7 @@ flowchart TD
 
     subgraph Voice Detection
         %% Nodes
-        Step1[Convert to 8kHz and check is_noise]
-        webrtc[is_noise = webrtc_vad_is_noise samples]
-        Step2[Get predict from silero_vad_prediction]
+        Step1[Get predict from silero_vad_prediction]
         silero[predict = silero_vad_prediction samples]
         is_voice[is_voice = predict > silero_vad_voice_threshold]
         Decision{Match is_noise, is_voice}
@@ -86,7 +83,7 @@ flowchart TD
         end
 
         %% Flow connections
-        Step1 --> webrtc --> Step2 --> silero --> is_voice --> Decision
+        Step1 --> silero --> is_voice --> Decision
 
         %% Decision branches
         Decision -->|is_noise = true and is_voice = true| CaseTrueTrue
@@ -124,7 +121,7 @@ flowchart TD
 The library provides a builder pattern for advanced configuration:
 
 ```rust,no_run
-use voice_stream::{VoiceStreamBuilder, WebRtcVoiceActivityProfile};
+use voice_stream::VoiceStreamBuilder;
 use voice_stream::cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 let (tx, rx) = std::sync::mpsc::channel();
@@ -150,7 +147,6 @@ let config = device
 let voice_stream = VoiceStreamBuilder::new(config, device, tx)
     .with_sound_buffer_until_size(1024)
     .with_voice_detection_silero_voice_threshold(0.5)
-    .with_voice_detection_webrtc_profile(WebRtcVoiceActivityProfile::AGGRESSIVE)
     .build()
     .unwrap();
 ```

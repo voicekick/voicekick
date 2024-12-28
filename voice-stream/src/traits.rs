@@ -62,13 +62,3 @@ impl IntoF32 for f64 {
         self as f32
     }
 }
-
-pub trait IntoI16 {
-    fn into_i16(self) -> i16;
-}
-
-impl IntoI16 for f32 {
-    fn into_i16(self) -> i16 {
-        (self * i16::MAX as f32) as i16
-    }
-}

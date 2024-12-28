@@ -3,12 +3,6 @@
 // Re-export
 pub use cpal;
 
-// Re-export
-pub use earshot::{
-    VoiceActivityDetector as WebRtcVoiceActivityDetector,
-    VoiceActivityProfile as WebRtcVoiceActivityProfile,
-};
-
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Device, PauseStreamError, PlayStreamError, SampleFormat, StreamConfig, SupportedStreamConfig,
@@ -67,7 +61,6 @@ pub struct VoiceStreamBuilder {
     tx: InputSoundSender,
     sound_stream_samples_buffer_size: usize,
 
-    voice_detection_webrtc_profile: WebRtcVoiceActivityProfile,
     voice_detection_silero_threshold: f32,
 }
 
@@ -83,7 +76,6 @@ impl VoiceStreamBuilder {
             device,
             tx,
             sound_stream_samples_buffer_size: 512,
-            voice_detection_webrtc_profile: WebRtcVoiceActivityProfile::VERY_AGGRESSIVE,
             voice_detection_silero_threshold: SILERO_VAD_VOICE_THRESHOLD,
         }
     }
@@ -121,21 +113,12 @@ impl VoiceStreamBuilder {
         self
     }
 
-    pub fn with_voice_detection_webrtc_profile(
-        mut self,
-        profile: WebRtcVoiceActivityProfile,
-    ) -> Self {
-        self.voice_detection_webrtc_profile = profile;
-        self
-    }
-
     /// Build a voice input stream
     pub fn build(self) -> Result<VoiceStream, VoiceInputError> {
         let outgoing_sample_rate = SAMPLE_RATE;
 
         let voice_detection = VoiceDetection::new(
             outgoing_sample_rate,
-            self.voice_detection_webrtc_profile,
             self.sound_stream_samples_buffer_size,
             self.voice_detection_silero_threshold,
         )?;
@@ -164,7 +147,7 @@ impl VoiceStreamBuilder {
 ///
 /// 1. Captures audio from the given input device
 /// 2. Resamples the audio to the desired sample rate (16kHz default)
-/// 3. Detects voice activity using WebRTC VAD and Silero VAD
+/// 3. Detects voice activity using Silero VAD
 /// 4. Sends the voice data to the receiver channel in chunks
 /// 5. The receiver channel can expect to receive voice data in chunks of 512<= samples
 pub struct VoiceStream {

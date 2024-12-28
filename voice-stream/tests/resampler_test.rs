@@ -3,6 +3,7 @@ use std::{sync::Arc, thread, time::Duration};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use voice_tests::{preprocess_samples, read_voice_dataset_wav_into_samples};
 
+#[allow(unused)]
 #[tokio::test]
 async fn test_resampler_playback() {
     let (samples, codec_params) = read_voice_dataset_wav_into_samples("Harvard list 01.wav");
@@ -23,7 +24,7 @@ async fn test_resampler_playback() {
         .expect("failed to find output device");
 
     let config = cpal::StreamConfig {
-        channels: channels as u16,
+        channels: 1,
         sample_rate: cpal::SampleRate(16000),
         buffer_size: cpal::BufferSize::Default,
     };
@@ -53,6 +54,7 @@ async fn test_resampler_playback() {
     stream.play().expect("failed to play stream");
 
     // Wait for the audio to finish playing
-    let duration = Duration::from_secs_f32(input_len as f32 / 16000.0);
+    // let duration = Duration::from_secs_f32(input_len as f32 / 16000.0);
+    let duration = Duration::from_secs(10);
     thread::sleep(duration);
 }
