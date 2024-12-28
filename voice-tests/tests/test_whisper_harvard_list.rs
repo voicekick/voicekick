@@ -12,7 +12,7 @@ async fn test_whisper_voice_dataset_harvard_list_01() {
             .channels
             .map(|channels| channels.count())
             .unwrap_or(1),
-        Some(1024),
+        Some(512),
         raw_samples.clone(),
     );
 

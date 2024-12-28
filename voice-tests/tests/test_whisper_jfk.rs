@@ -12,11 +12,11 @@ async fn test_whisper_voice_dataset_jfk() {
             .channels
             .map(|channels| channels.count())
             .unwrap_or(1),
-        Some(1024),
+        Some(512),
         raw_samples.clone(),
     );
 
-    let models = vec![WhichModel::TinyEn, WhichModel::BaseEn];
+    let models = vec![WhichModel::TinyEn, WhichModel::BaseEn, WhichModel::SmallEn];
 
     let expected = "
         and so my fellow americans ask not what
