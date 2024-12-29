@@ -16,6 +16,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
+          sudo apt-get install --reinstall build-essential
           sudo apt-get -y install libasound2-dev gobjc++-mingw-w64
       - name: Install nightly toolchain
         uses: actions-rs/toolchain@v1
@@ -37,6 +38,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
+          sudo apt-get install --reinstall build-essential
           sudo apt-get -y install libasound2-dev gobjc++-mingw-w64
       - name: Install nightly toolchain
         uses: actions-rs/toolchain@v1
@@ -58,6 +60,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
+          sudo apt-get install --reinstall build-essential
           sudo apt-get -y install libasound2-dev gobjc++-mingw-w64
       - name: Install nightly toolchain
         uses: actions-rs/toolchain@v1
