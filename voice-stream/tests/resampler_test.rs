@@ -1,4 +1,4 @@
-use std::{sync::Arc, thread, time::Duration};
+use std::{env, sync::Arc, thread, time::Duration};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use voice_tests::{preprocess_samples, read_voice_dataset_wav_into_samples};
@@ -6,6 +6,10 @@ use voice_tests::{preprocess_samples, read_voice_dataset_wav_into_samples};
 #[allow(unused)]
 #[tokio::test]
 async fn test_resampler_playback() {
+    if env::var("CI").is_ok() {
+        return;
+    }
+
     let (samples, codec_params) = read_voice_dataset_wav_into_samples("Harvard list 01.wav");
 
     let sample_rate = codec_params.sample_rate.unwrap_or(0) as usize;
