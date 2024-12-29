@@ -14,7 +14,7 @@ async fn test_resampler_playback() {
         .map(|channels| channels.count())
         .unwrap_or(1);
 
-    let input = preprocess_samples(sample_rate, 16000, channels, Some(512), samples);
+    let input = preprocess_samples(sample_rate, 16000, channels, samples);
     let input_len = input.len();
 
     let host = cpal::default_host();

@@ -17,7 +17,7 @@ async fn test_silero_vad_predict() {
         .map(|channels| channels.count())
         .unwrap_or(1);
 
-    let input = preprocess_samples(sample_rate, 16000, channels, Some(512), samples);
+    let input = preprocess_samples(sample_rate, 16000, channels, samples);
 
     let chunks = input.chunks(SILERO_VAD_CHUNK_SIZE).collect::<Vec<_>>();
 
@@ -56,7 +56,7 @@ async fn test_silero_vad_predict() {
         .map(|channels| channels.count())
         .unwrap_or(1);
 
-    let input = preprocess_samples(sample_rate, 16000, channels, Some(512), samples);
+    let input = preprocess_samples(sample_rate, 16000, channels, samples);
 
     let chunks = input.chunks(SILERO_VAD_CHUNK_SIZE);
 
@@ -99,7 +99,7 @@ async fn test_vad_combined() {
             .map(|channels| channels.count())
             .unwrap_or(1);
 
-        let input = preprocess_samples(sample_rate, 16000, channels, Some(512), samples);
+        let input = preprocess_samples(sample_rate, 16000, channels, samples);
 
         let chunks = input.chunks(chunk_size).collect::<Vec<_>>();
 

@@ -45,7 +45,8 @@ async fn main() -> Result<(), VoiceInputError> {
     let (tx, rx) = mpsc::channel();
     let input_sound = VoiceStreamBuilder::new(config, device, tx).build()?;
 
-    let mut whisper = voice_whisper::new(WhichModel::BaseEn, Some("en"))?;
+    let mut whisper =
+        voice_whisper::WhisperBuilder::infer(WhichModel::BaseEn, Some("en"))?.build()?;
 
     tokio::spawn(async move {
         loop {

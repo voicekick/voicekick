@@ -26,7 +26,10 @@ async fn test_whisper_voice_dataset_jfk() {
     .join(" ");
 
     for model in models {
-        let mut whisper = voice_whisper::new(model, None).unwrap();
+        let mut whisper = voice_whisper::WhisperBuilder::infer(model, None)
+            .unwrap()
+            .build()
+            .unwrap();
         let got = whisper.with_mel_segments(&resampled_samples).unwrap();
 
         assert_eq!(got.len(), 1, "fail {:?}", got);

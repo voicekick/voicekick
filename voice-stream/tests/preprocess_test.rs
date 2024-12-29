@@ -11,7 +11,7 @@ async fn test_preprocess_samples() {
         .map(|channels| channels.count())
         .unwrap_or(1);
 
-    let samples = preprocess_samples(sample_rate, 16000, channels, Some(512), samples);
+    let samples = preprocess_samples(sample_rate, 16000, channels, samples);
 
     // First 10 elements
     assert_eq!(
@@ -19,14 +19,14 @@ async fn test_preprocess_samples() {
         &[
             0.0,
             0.0,
+            7.4505806e-8,
             0.0,
+            -9.536743e-7,
             0.0,
-            -7.4505806e-8,
-            2.2351742e-7,
+            5.990267e-6,
             0.0,
-            0.0,
-            7.301569e-7,
-            -2.6375055e-6
+            -3.066659e-5,
+            -3.0517578e-5
         ]
     );
 }

@@ -65,7 +65,11 @@ async fn test_whisper_voice_dataset_harvard_list_01() {
     let models = vec![WhichModel::BaseEn];
 
     for model in models {
-        let mut whisper = voice_whisper::new(model, None).unwrap();
+        let mut whisper = voice_whisper::WhisperBuilder::infer(model, None)
+            .unwrap()
+            .add_boost_words(&["was"], Some(voice_whisper::WithSpace::BeforeAndAfter))
+            .build()
+            .unwrap();
         let segments = whisper.with_mel_segments(&resampled_samples).unwrap();
 
         for segment in segments.iter() {

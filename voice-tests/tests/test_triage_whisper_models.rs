@@ -72,8 +72,6 @@ pub fn speech_commands_expectations(limit: Option<usize>) -> BTreeMap<String, Ve
 async fn test_voice_commands_whisper_model(
     model: WhichModel,
 ) -> (WhichModel, BTreeMap<String, usize>) {
-    let mut whisper = voice_whisper::new(model, None).unwrap();
-
     let expectations = speech_commands_expectations(Some(3));
     let total_expectations = expectations.values().into_iter().flatten().count();
 
@@ -86,7 +84,11 @@ async fn test_voice_commands_whisper_model(
 
     for (expectation, files) in expectations.iter() {
         for temperature in temperatures.iter() {
-            whisper.with_temperatures(vec![*temperature]);
+            let mut whisper = voice_whisper::WhisperBuilder::infer(model, None)
+                .unwrap()
+                .temperatures(vec![*temperature])
+                .build()
+                .unwrap();
 
             for file in files.iter() {
                 let (raw_samples, codec_params) = read_wav_into_samples(file);
@@ -149,8 +151,11 @@ async fn test_triage_voice_commands_whisper_english_models() {
 
 #[allow(dead_code)]
 fn whisper_dir(paths: Vec<String>, expectation: &str) -> Vec<String> {
-    let mut whisper = voice_whisper::new(WhichModel::TinyEn, None).unwrap();
-    whisper.with_temperatures(vec![0.5]);
+    let mut whisper = voice_whisper::WhisperBuilder::infer(WhichModel::TinyEn, None)
+        .unwrap()
+        .temperatures(vec![0.5])
+        .build()
+        .unwrap();
 
     let mut output = Vec::new();
 

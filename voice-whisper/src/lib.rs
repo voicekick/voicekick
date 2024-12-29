@@ -1,17 +1,13 @@
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-};
+use std::{collections::HashMap, path::PathBuf};
 
 use candle_core::{Device, IndexOp, Shape, Tensor};
-use candle_nn::{ops::softmax, VarBuilder};
+use candle_nn::ops::softmax;
 use candle_transformers::models::whisper::{self as m, Config};
 use hf_hub::{
     api::sync::{Api, ApiError},
     Repo, RepoType,
 };
 use inference_candle::{
-    inference_device,
     proto::{self, DecodingResult, Segment},
     InferenceError, InferenceResult, SpeechRecognitionDecoder, SpeechRecognitionModel,
 };
@@ -19,7 +15,9 @@ use tokenizers::Tokenizer;
 use tracing::debug;
 
 mod audio;
+mod builder;
 mod multilingual;
+pub use builder::WhisperBuilder;
 
 const ZERO: f32 = 0.0;
 
@@ -45,6 +43,7 @@ pub mod audio_params {
     /// Original: (400-128)/400 = 68% overlap
     /// - 200;  // 50% overlap
     /// - 300;  // 25% overlap
+    /// - 360;  // 10% overlap
     ///
     /// Tradeoff: larger HOP_LENGTH = faster processing but may miss audio transitions
     /// Minimum recommended overlap is 25%
@@ -196,56 +195,44 @@ pub fn model_filenames(which_model: WhichModel) -> Result<(PathBuf, PathBuf, Pat
     Ok((config, tokenizer, weights))
 }
 
-pub fn vector_into_tokens(tokenizer: &Tokenizer, input: &[&str]) -> Vec<u32> {
-    input
-        .iter()
-        .flat_map(|n| {
-            tokenizer
-                // .token_to_id(n)
-                .encode(*n, false)
-                .expect(&format!("no token-id for {n}"))
-                .get_ids()
-                .to_vec()
-        })
-        .collect()
+/// Create a set of token setters for the Whisper model.
+pub enum WithSpace {
+    /// Add a space before the token.
+    Before,
+    /// Add a space after the token.
+    After,
+    /// Add a space before and after the token.
+    BeforeAndAfter,
 }
 
-pub fn new(which_model: WhichModel, language: Option<&str>) -> InferenceResult<Decoder> {
-    let device = inference_device()?;
-
-    let (config_filename, tokenizer_filename, weights_filename) = model_filenames(which_model)?;
-
-    let config: Config = serde_json::from_str(&std::fs::read_to_string(config_filename)?)?;
-    let tokenizer = Tokenizer::from_file(tokenizer_filename)?;
-
-    let model = if which_model.is_quantized() {
-        let vb = candle_transformers::quantized_var_builder::VarBuilder::from_gguf(
-            &weights_filename,
-            &device,
-        )?;
-        Model::Quantized(m::quantized_model::Whisper::load(&vb, config.clone())?)
-    } else {
-        let vb =
-            unsafe { VarBuilder::from_mmaped_safetensors(&[weights_filename], m::DTYPE, &device)? };
-        Model::Normal(m::model::Whisper::load(&vb, config.clone())?)
+/// Convert a vector of strings into a vector of token IDs.
+pub fn vector_into_tokens(
+    tokenizer: &Tokenizer,
+    input: &[&str],
+    space: Option<WithSpace>,
+) -> Vec<u32> {
+    let encode = |n: &str| -> Vec<u32> {
+        tokenizer
+            .encode(n, false)
+            .expect(&format!("no token-id for {n}"))
+            .get_ids()
+            .to_vec()
     };
 
-    let language_token = if which_model.is_multilingual() {
-        let lang = language.expect("language must be set for multilingual models");
-
-        assert!(
-            multilingual::SUPPORTED_LANGUAGES
-                .iter()
-                .any(|(t, _)| t == &lang),
-            "provided language {lang} is not supported"
-        );
-
-        Some(token_id(&tokenizer, &format!("<|{lang}|>"))?)
+    let spaced: Vec<u32> = if let Some(s) = space {
+        input
+            .iter()
+            .flat_map(|n| match s {
+                WithSpace::Before => encode(&format!(" {n}")),
+                WithSpace::After => encode(&format!("{n} ")),
+                WithSpace::BeforeAndAfter => encode(&format!(" {n} ")),
+            })
+            .collect()
     } else {
-        None
+        vec![]
     };
 
-    Decoder::new(device, config, model, tokenizer, language_token)
+    input.iter().flat_map(|n| encode(n)).chain(spaced).collect()
 }
 
 impl SpeechRecognitionModel for Model {
@@ -274,7 +261,7 @@ impl SpeechRecognitionModel for Model {
     }
 }
 
-pub struct Decoder {
+pub struct Whisper {
     device: Device,
     model: Model,
     config: Config,
@@ -307,7 +294,18 @@ pub fn token_id(tokenizer: &Tokenizer, token: &str) -> InferenceResult<u32> {
     .map_err(Into::into)
 }
 
-impl Decoder {
+impl Whisper {
+    // Create a builder method
+    pub fn builder(
+        device: Device,
+        config: Config,
+        model: Model,
+        tokenizer: Tokenizer,
+        language_token: Option<u32>,
+    ) -> WhisperBuilder {
+        WhisperBuilder::new(device, config, model, tokenizer, language_token)
+    }
+
     /// Create a new decoder.
     pub fn new(
         device: Device,
@@ -316,7 +314,6 @@ impl Decoder {
         tokenizer: Tokenizer,
         language_token: Option<u32>,
     ) -> InferenceResult<Self> {
-        let seed = 299792458;
         let no_timestamps_token = token_id(&tokenizer, m::NO_TIMESTAMPS_TOKEN)?;
         // Suppress the notimestamps token when in timestamps mode.
         // https://github.com/openai/whisper/blob/e8622f9afc4eba139bf796c210f5c01081000472/whisper/decoding.py#L452
@@ -365,43 +362,7 @@ impl Decoder {
             &mut mel_filters,
         );
 
-        let space_token = vector_into_tokens(&tokenizer, &[" "])[0];
-
-        let boost_tokens = vector_into_tokens(
-            &tokenizer,
-            &[
-                "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-                "ten",
-            ],
-        );
-
-        let command_tokens = vector_into_tokens(
-            &tokenizer,
-            &[
-                // "four", "off", "forward", "five", "on", "yes", "six", "down", "house", "two",
-                // "marvin", "visual", "up", "seven", "zero", "bird", "one", "sheila", "three",
-                // "stop", "left", "nine", "follow", "wow", "no", "dog", "go", "happy", "bed", "tree",
-                // "learn", "backward", "cat", "eight", "right",
-            ],
-        );
-
-        #[rustfmt::skip]
-        let penalty_tokens = vector_into_tokens(
-            &tokenizer,
-            &[
-                " ",
-                // Punctuation tokens
-                "!", "'", "\\", "`", "(", ")", "*", ",", ".", "..", "...",
-                ":", ";", "?", "[", "]", "_", "{", "|", "}", "~",
-
-                // Punctuation tokens with spaces
-                ". ", ", ", "! ", "? ", "... ", "; ", ": ",
-                // Numbers
-                "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-                // Numbers with spaces
-                " 0", " 1", " 2", " 3", " 4", " 5", " 6", " 7", " 8", " 9",
-            ],
-        );
+        let space_token = vector_into_tokens(&tokenizer, &[" "], None)[0];
 
         Ok(Self {
             device,
@@ -412,21 +373,16 @@ impl Decoder {
             suppress_tokens,
             sot_token,
             transcribe_token,
-            command_tokens,
             eot_token,
             space_token,
             no_speech_token,
             language_token,
             no_timestamps_token,
-            boost_tokens,
-            penalty_tokens,
+            boost_tokens: vec![],
+            command_tokens: vec![],
+            penalty_tokens: vec![],
             temperatures: audio_params::TEMPERATURES.to_vec(),
         })
-    }
-
-    /// Set temperatures for decoding.
-    pub fn with_temperatures(&mut self, temperatures: Vec<f64>) {
-        self.temperatures = temperatures;
     }
 
     /// Convert samples into mel spectrogram.
@@ -451,25 +407,46 @@ impl Decoder {
 
         self.segments(&mel)
     }
-
-    fn special_tokens(&self) -> [u32; 4] {
-        [
-            self.sot_token,
-            self.transcribe_token,
-            self.no_timestamps_token,
-            self.space_token,
-        ]
-    }
-
-    fn is_special_token(&self, token: u32) -> bool {
-        self.special_tokens().contains(&token)
-    }
 }
 
-impl SpeechRecognitionDecoder for Decoder {
-    fn decode(&mut self, mel: &Tensor, temperature: f64) -> InferenceResult<proto::DecodingResult> {
-        let special_tokens = self.special_tokens();
+#[allow(unsued)]
+fn debug_top_logits(tokenizer: &Tokenizer, logits_vec: &Vec<f32>, logits: Tensor) {
+    // Create a vector of (logit value, token) pairs
+    let mut indexed_logits: Vec<(f32, u32)> = logits_vec
+        .iter()
+        .enumerate()
+        .map(|(idx, &logit)| (logit, idx as u32))
+        .collect();
 
+    // Sort in descending order by logit value
+    indexed_logits.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+
+    // Take top 10 and decode tokens
+    println!("Top 10 Logits:");
+    for (logit, token) in indexed_logits.iter().take(10) {
+        match tokenizer.decode(&[*token], true) {
+            Ok(text) => {
+                println!(
+                    "Token: {}, Logit: {:.4}, Text: '{}'",
+                    token,
+                    logit,
+                    text.trim()
+                );
+            }
+            Err(e) => {
+                println!(
+                    "Token: {}, Logit: {:.4}, Decode Error: {:?}",
+                    token, logit, e
+                );
+            }
+        }
+    }
+
+    println!("Logits {:?}", logits);
+}
+
+impl SpeechRecognitionDecoder for Whisper {
+    fn decode(&mut self, mel: &Tensor, temperature: f64) -> InferenceResult<proto::DecodingResult> {
         // 1. Initial setup
         let model = &mut self.model;
         let audio_features = model.encoder_forward(mel, true)?;
@@ -492,9 +469,7 @@ impl SpeechRecognitionDecoder for Decoder {
         let command_boost_value = 3.0f32; // Adjust this value to control how much we favor commands
 
         // 2. Token tracking
-        let mut seen_tokens: HashSet<u32> = HashSet::new();
-        let mut word_tokens = 0;
-        let max_word_tokens = 1;
+        let mut last_tokens: [u32; 3] = [0, 0, 0];
 
         // 3. Create initial token sequence
         // The tokens must be in a specific sequence that matches how the model was trained:
@@ -520,7 +495,6 @@ impl SpeechRecognitionDecoder for Decoder {
             let dims1: u32 = m.dims1()? as u32;
 
             // Suppress space token always
-            // TODO: questionable
             m = m.slice_assign(
                 &[self.space_token as usize..=self.space_token as usize],
                 &Tensor::new(&[-f32::INFINITY], mel.device())?,
@@ -553,8 +527,6 @@ impl SpeechRecognitionDecoder for Decoder {
             m
         };
 
-        println!("sample_len {}", sample_len);
-
         // 5. Main decoding loop
         for i in 0..sample_len {
             // Reduced for speech commands
@@ -562,22 +534,6 @@ impl SpeechRecognitionDecoder for Decoder {
             let tokens_t = Tensor::new(tokens.as_slice(), mel.device())?;
             let tokens_t = tokens_t.unsqueeze(0)?;
             let ys = model.decoder_forward(&tokens_t, &audio_features, i == 0)?;
-
-            println!(
-                "token_frequencies {:?} seen_tokens {:?} word_tokens {}",
-                token_frequencies
-                    .iter()
-                    .map(|(k, v)| {
-                        let kk = self
-                            .tokenizer
-                            .decode(&[*k], true)
-                            .unwrap_or_else(|_| format!("{}", k));
-                        format!("{}:{}", kk, v)
-                    })
-                    .collect::<Vec<String>>(),
-                seen_tokens,
-                word_tokens
-            );
 
             // Handle first iteration special cases
             if i == 0 {
@@ -588,50 +544,20 @@ impl SpeechRecognitionDecoder for Decoder {
             }
 
             let (_, seq_len, _) = ys.dims3()?;
-            let mut logits = model
+            let logits = model
                 .decoder_final_linear(&ys.i((..1, seq_len - 1..))?)?
                 .i(0)?
                 .i(0)?;
 
-            // Apply repetition penalty using token frequencies
+            // Convert logits to a vector and index
             let mut logits_vec: Vec<f32> = logits.to_vec1()?;
 
-            // for (token, frequency) in &token_frequencies {
-            //     if *frequency > repetition_frequency {
-            //         // Instead of repetition_frequency
-            //         let token_idx = *token as usize;
+            // debug_top_logits(&self.tokenizer, &logits_vec, logits);
 
-            //         if let Some(last_token) = tokens.last() {
-            //             println!(
-            //                 "Last token {} token {} frequency {}",
-            //                 last_token, token, frequency
-            //             );
-            //         }
-
-            //         // TODO: apply penalty only to the tokens repeating last token
-            //         if token_idx < logits_vec.len() {
-            //             let penalty = repetition_penalty.powi(*frequency as i32);
-            //             logits_vec[token_idx] = if logits_vec[token_idx] < ZERO {
-            //                 logits_vec[token_idx] * penalty as f32
-            //             } else {
-            //                 logits_vec[token_idx] / penalty as f32
-            //             };
-            //         }
-            //     }
-            // }
-            // Apply repetition penalty only for tokens that repeat the last token
-            let last_two_tokens = tokens
-                .get(tokens.len().saturating_sub(2 + special_tokens.len())..)
-                .unwrap_or(&[])
-                .into_iter()
-                .filter(|&t| !special_tokens.contains(t))
-                .rev()
-                .take(2)
-                .collect::<Vec<_>>();
-
+            // Apply repetition penalty only for tokens that repeat at lot
             for (token, frequency) in &token_frequencies {
                 // Only penalize if this token matches the last token and has been used
-                if last_two_tokens.contains(&token) || *frequency > repetition_frequency {
+                if *frequency > repetition_frequency {
                     let token_idx = *token as usize;
                     if token_idx < logits_vec.len() {
                         // Strong penalty for immediate repetition
@@ -646,56 +572,68 @@ impl SpeechRecognitionDecoder for Decoder {
             }
 
             // Convert back and apply mask
-            logits = Tensor::new(logits_vec.as_slice(), mel.device())?;
-            logits = logits.broadcast_add(&mask)?;
+            let mut masked_logits = Tensor::new(logits_vec.as_slice(), mel.device())?;
+            masked_logits = masked_logits.broadcast_add(&mask)?;
 
             // Get next token
             let next_token = if temperature > 0f64 {
-                let prs = softmax(&(&logits / temperature)?, 0)?;
+                let prs = softmax(&(&masked_logits / temperature)?, 0)?;
                 let logits_v: Vec<f32> = prs.to_vec1()?;
                 logits_v
                     .iter()
                     .enumerate()
                     .max_by(|(_, u), (_, v)| u.total_cmp(v))
                     .map(|(i, _)| i as u32)
-                    .unwrap()
+                    .unwrap_or(0)
             } else {
-                let logits_v: Vec<f32> = logits.to_vec1()?;
+                let logits_v: Vec<f32> = masked_logits.to_vec1()?;
                 logits_v
                     .iter()
                     .enumerate()
                     .max_by(|(_, u), (_, v)| u.total_cmp(v))
                     .map(|(i, _)| i as u32)
-                    .unwrap()
+                    .unwrap_or(0)
             };
 
             // Check stopping conditions first
             if next_token == self.eot_token
-            // || word_tokens >= max_word_tokens
-            // || seen_tokens.contains(&next_token)
+            // Model halucinating the same token, e.g.: back backward back backward back
+            || (last_tokens[0] == next_token &&  last_tokens[2] == next_token)
             {
                 break;
             }
 
+            last_tokens[0] = last_tokens[1];
+            last_tokens[1] = last_tokens[2];
+
+            if last_tokens[2] == next_token {
+                break;
+            }
+
+            last_tokens[2] = next_token;
+
             // Add token if valid
-            if !self.penalty_tokens.contains(&next_token) {
+            if self.penalty_tokens.contains(&next_token) {
+                debug!(
+                    "Skipping penalty token {next_token} decoded '{}'",
+                    self.tokenizer.decode(&[next_token], true)?
+                );
+
+                continue;
+            } else {
                 tokens.push(next_token);
-                seen_tokens.insert(next_token);
-                word_tokens += 1;
                 *token_frequencies.entry(next_token).or_insert(0) += 1; // Add this line
 
-                let prob = softmax(&logits, candle_core::D::Minus1)?
+                let prob = softmax(&masked_logits, candle_core::D::Minus1)?
                     .i(next_token as usize)?
                     .to_scalar::<f32>()? as f64;
                 sum_logprob += prob.ln();
-            } else {
-                println!("Skipping penalty token {next_token}");
             }
         }
 
         // 6. Final processing
         let text = self.tokenizer.decode(&tokens, true)?.trim().to_lowercase();
-        println!("Token {:?} decoded to text: {}", tokens, text);
+
         let avg_logprob = sum_logprob / tokens.len() as f64;
 
         Ok(DecodingResult {
@@ -757,19 +695,12 @@ impl SpeechRecognitionDecoder for Decoder {
         // Max chunk size for Whisper is 3000 frames
         let max_chunk_size = audio_params::N_FRAMES_MAX;
 
-        let max_real_time_chunk_size: usize = 8 * audio_params::HOP_LENGTH;
-        let content_chunks = content_frames / audio_params::HOP_LENGTH;
-        let chunk_size = std::cmp::min(
-            content_chunks * audio_params::HOP_LENGTH,
-            max_real_time_chunk_size,
-        );
-
         let segment_size = usize::min(content_frames, max_chunk_size);
 
         while seek < content_frames {
             let segment_size = usize::min(content_frames - seek, segment_size);
 
-            println!(
+            debug!(
                 "content_frames {} seek {} segment_size {}",
                 content_frames, seek, segment_size
             );
@@ -783,7 +714,7 @@ impl SpeechRecognitionDecoder for Decoder {
             if dr.no_speech_prob > audio_params::NO_SPEECH_THRESHOLD
                 && dr.avg_logprob < audio_params::LOGPROB_THRESHOLD
             {
-                println!("no speech detected, skipping {seek} {dr:?}");
+                debug!("no speech detected, skipping {seek} {dr:?}");
                 continue;
             }
             let segment = Segment {
