@@ -51,6 +51,7 @@ impl Resampler {
         })
     }
 
+    #[allow(clippy::needless_range_loop)]
     pub fn process(&mut self, input: &[f32]) -> Vec<f32> {
         if input.is_empty() {
             return Vec::new();
