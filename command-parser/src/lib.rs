@@ -24,6 +24,7 @@ pub enum CommandParserError {
     NoCloseMatches(String),
 }
 
+#[derive(Default)]
 pub struct CommandParserBuilder {
     namespaces: Vec<Namespace>,
 }
@@ -31,9 +32,7 @@ pub struct CommandParserBuilder {
 impl CommandParserBuilder {
     /// Creates a new `CommandParserBuilder`
     pub fn new() -> Self {
-        CommandParserBuilder {
-            namespaces: Vec::new(),
-        }
+        CommandParserBuilder::default()
     }
 
     /// Registers a new namespace with a specific threshold
@@ -72,9 +71,11 @@ impl CommandParserBuilder {
     }
 }
 
+type CommandAction<'s> = (&'s fn(&str), String);
+
 impl CommandParser {
     /// Parses a command input with a namespace prefix and executes the closest matching command
-    pub fn parse(&self, input: &str) -> Result<(&fn(&str), String), CommandParserError> {
+    pub fn parse(&self, input: &str) -> Result<CommandAction, CommandParserError> {
         // Split input into namespace and rest of the command
         let parts: Vec<&str> = input.splitn(2, ' ').collect();
         if parts.len() < 2 {
@@ -99,9 +100,9 @@ impl CommandParser {
                     return Err(CommandParserError::NoCloseMatches(command_text.to_string()));
                 }
             }
-            return Err(CommandParserError::CommandNotFound(
+            Err(CommandParserError::CommandNotFound(
                 command_text.to_string(),
-            ));
+            ))
         } else {
             Err(CommandParserError::NamespaceNotFound(
                 namespace_name.to_string(),
