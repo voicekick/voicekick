@@ -17,3 +17,5 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 inference-candle = { path = "../inference-candle" }
 voice-whisper = { path = "../voice-whisper" }
 similar-asserts = "1"
+command-parser = { path = "../command-parser" }
+hound = "3.5.1"
