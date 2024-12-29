@@ -157,4 +157,3 @@ async fn main() -> Result<(), VoiceInputError> {
 
     Ok(())
 }
-

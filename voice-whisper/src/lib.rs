@@ -166,9 +166,7 @@ impl Model {
 pub fn model_filenames(which_model: WhichModel) -> Result<(PathBuf, PathBuf, PathBuf), ApiError> {
     let (default_model, default_revision) = which_model.model_and_revision();
 
-    // TODO: add support of env variables to set custom
     let model_id = default_model.to_string();
-    // TODO: add support of env variables to set custom
     let revision = default_revision.to_string();
 
     let api = Api::new()?;
