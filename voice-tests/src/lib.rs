@@ -4,7 +4,7 @@ use symphonia::core::audio::{AudioBufferRef, Signal};
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::conv::FromSample;
 use symphonia_core::codecs::CodecParameters;
-use voice_stream::{voice::VoiceDetection, Resampler, WebRtcVoiceActivityProfile};
+use voice_stream::{voice::VoiceDetection, Resampler};
 
 pub type BoxError = Box<dyn StdError + Send + Sync>;
 
@@ -33,51 +33,59 @@ pub fn read_voice_dataset_wav_into_samples(path: &str) -> (Vec<f32>, CodecParame
 pub fn read_wav_into_samples(path: &str) -> (Vec<f32>, CodecParameters) {
     let (samples, codec_params) = pcm_decode(path).expect("Failed to decode PCM");
 
-    // let sample_rate = codec_params.sample_rate.unwrap_or(0) as usize;
-    // let channels = codec_params
-    //     .channels
-    //     .map(|channels| channels.count())
-    //     .unwrap_or(1);
+    let sample_rate = codec_params.sample_rate.unwrap_or(0) as usize;
+    let channels = codec_params
+        .channels
+        .map(|channels| channels.count())
+        .unwrap_or(1);
 
-    // println!(
-    //     "READ samples {} file '{}' sample rate {} channels {}",
-    //     samples.len(),
-    //     path,
-    //     sample_rate,
-    //     channels,
-    // );
+    println!(
+        "READ samples {} file '{}' sample rate {} channels {}",
+        samples.len(),
+        path,
+        sample_rate,
+        channels,
+    );
 
     (samples, codec_params)
 }
 
 /// Preprocess samples
 pub fn preprocess_samples(
-    incoming_sample_rate: usize,
-    outgoing_sample_rate: usize,
+    input_sample_rate: usize,
+    output_sample_rate: usize,
     channels: usize,
-    chunk_size: Option<usize>,
     samples: Vec<f32>,
 ) -> Vec<f32> {
+    println!(
+        "Preprocessing - Input samples: {}, rate: {}, channels: {}",
+        samples.len(),
+        input_sample_rate,
+        channels
+    );
+
+    let chunk_size = Some(512);
+
     let mut resampler = Resampler::new(
-        incoming_sample_rate as f64,
-        outgoing_sample_rate as f64,
+        input_sample_rate as f64,
+        output_sample_rate as f64,
         chunk_size,
         channels,
     )
-    .expect("Failed to create Resampler");
+    .unwrap();
 
-    // let before = samples.len();
-    let samples = resampler.process(&samples);
-    // let after = samples.len();
+    let chunk_size = 512 * channels;
+    let mut output = Vec::new();
 
-    // println!(
-    //     "PREPROCESS RATIO {:.1} samples {} -> {}",
-    //     after as f32 / before as f32,
-    //     before,
-    //     after
-    // );
+    // Process input in chunks
+    for chunk in samples.chunks(chunk_size) {
+        let resampled = resampler.process(chunk);
+        output.extend(resampled);
+    }
 
-    samples
+    println!("After resampling - Output samples: {}", output.len());
+
+    output
 }
 
 pub fn new_voice_detection(
@@ -85,13 +93,8 @@ pub fn new_voice_detection(
     chunk_size: usize,
     siler_voice_threshold: f32,
 ) -> VoiceDetection {
-    VoiceDetection::new(
-        sample_rate,
-        WebRtcVoiceActivityProfile::VERY_AGGRESSIVE,
-        chunk_size,
-        siler_voice_threshold,
-    )
-    .expect("Failed to create VoiceDetection")
+    VoiceDetection::new(sample_rate, chunk_size, siler_voice_threshold)
+        .expect("Failed to create VoiceDetection")
 }
 
 fn conv<T>(samples: &mut Vec<f32>, data: std::borrow::Cow<symphonia::core::audio::AudioBuffer<T>>)

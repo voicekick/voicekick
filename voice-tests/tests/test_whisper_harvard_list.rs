@@ -4,6 +4,12 @@ use voice_whisper::WhichModel;
 #[tokio::test]
 async fn test_whisper_voice_dataset_harvard_list_01() {
     let (raw_samples, codec_params) = read_voice_dataset_wav_into_samples("Harvard list 01.wav");
+    println!(
+        "Original samples: {}, rate: {}, channels: {}",
+        raw_samples.len(),
+        codec_params.sample_rate.unwrap_or(0),
+        codec_params.channels.map(|c| c.count()).unwrap_or(1)
+    );
 
     let resampled_samples: Vec<f32> = preprocess_samples(
         codec_params.sample_rate.unwrap_or(0) as usize,
@@ -12,9 +18,17 @@ async fn test_whisper_voice_dataset_harvard_list_01() {
             .channels
             .map(|channels| channels.count())
             .unwrap_or(1),
-        Some(512),
         raw_samples.clone(),
     );
+
+    println!("Resampled samples: {}", resampled_samples.len());
+
+    // Check for silence/zero samples at the start and end
+    let non_zero_samples = resampled_samples
+        .iter()
+        .filter(|&&x| x.abs() > 1e-6)
+        .count();
+    println!("Non-zero samples: {}", non_zero_samples);
 
     // Harvard list number one
     //

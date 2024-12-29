@@ -5,7 +5,6 @@ This library provides utilities for processing and testing voice audio files, pa
 ## Features
 
 - Audio file decoding (WAV and other formats) using Symphonia
-- Voice activity detection using WebRTC VAD
 - Audio sample preprocessing and resampling
 - Support for managing speech command datasets
 - Utilities for reading and organizing voice test files
@@ -50,7 +49,6 @@ let processed = preprocess_samples(
     44100,  // input sample rate
     16000,  // output sample rate
     1,      // channels
-    None,   // chunk size
     samples
 );
 

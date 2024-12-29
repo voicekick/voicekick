@@ -12,7 +12,6 @@ async fn test_whisper_voice_dataset_jfk() {
             .channels
             .map(|channels| channels.count())
             .unwrap_or(1),
-        Some(512),
         raw_samples.clone(),
     );
 
