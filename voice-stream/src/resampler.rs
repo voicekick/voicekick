@@ -51,20 +51,34 @@ impl Resampler {
         })
     }
 
-    // In Resampler, just do sample rate conversion
     pub fn process(&mut self, input: &[f32]) -> Vec<f32> {
         if input.is_empty() {
             return Vec::new();
         }
 
         if self.resample_ratio == 1.0 {
-            return input.to_vec();
+            // If single channel, return as-is
+            if self.channels == 1 {
+                return input.to_vec();
+            }
+
+            // If multi-channel and no resampling, convert to mono
+            let frames = input.len() / self.channels;
+            let mut mono_output = Vec::with_capacity(frames);
+            for frame in 0..frames {
+                let mono_sample = (0..self.channels)
+                    .map(|ch| input[frame * self.channels + ch])
+                    .sum::<f32>()
+                    / self.channels as f32;
+                mono_output.push(mono_sample);
+            }
+            return mono_output;
         }
 
+        // Rest of the existing resampling logic...
         let frames = input.len() / self.channels;
         let required_frames = self.resampler.input_frames_next();
 
-        // Create channel buffers with required size, zero-padded
         let mut indata: Vec<Vec<f32>> = vec![vec![0.0; required_frames]; self.channels];
 
         // Fill with actual data
@@ -87,13 +101,21 @@ impl Resampler {
             .process_into_buffer(&indata_slices, &mut outbuffer, None)
         {
             Ok((_, nbr_out)) => {
-                // Only take the number of frames corresponding to our input
                 let output_frames = ((frames as f64 * self.resample_ratio) as usize).min(nbr_out);
 
-                // Keep original channel format
-                for frame in 0..output_frames {
-                    for ch in 0..self.channels {
-                        output.push(outbuffer[ch][frame]);
+                // Convert to mono if multi-channel
+                if self.channels > 1 {
+                    for frame in 0..output_frames {
+                        let mono_sample = (0..self.channels)
+                            .map(|ch| outbuffer[ch][frame])
+                            .sum::<f32>()
+                            / self.channels as f32;
+                        output.push(mono_sample);
+                    }
+                } else {
+                    // Keep original channel format for single channel
+                    for frame in 0..output_frames {
+                        output.push(outbuffer[0][frame]);
                     }
                 }
             }
@@ -193,30 +215,18 @@ mod tests {
         assert_eq!(
             output,
             vec![
-                -0.0022354315,
-                -0.004470863,
-                0.013463395,
-                0.030991213,
+                -0.0033531473,
+                0.022227304,
                 0.0,
-                0.0,
-                -0.061474368,
-                -0.15871564,
-                0.19311081,
-                0.507951,
-                1.0,
-                2.0,
-                2.2879643,
-                3.3643246,
-                3.6823146,
-                4.6621957,
-                5.0,
-                6.0,
-                6.331301,
-                7.3333335,
-                7.666667,
-                8.666667,
-                9.0,
-                10.0
+                -0.110095,
+                0.35053092,
+                1.5,
+                2.8261445,
+                4.172255,
+                5.5,
+                6.8323174,
+                8.166667,
+                9.5
             ]
         );
     }
