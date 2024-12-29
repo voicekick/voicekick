@@ -31,6 +31,7 @@ pub mod audio_params {
     /// - Gives ~75% overlap between consecutive windows
     /// - Results in 16000/128 ≈ 125 frames per second
     /// Each window:
+    ///
     /// |----400 samples----|
     ///       |----400 samples----|
     ///             |----400 samples----|
@@ -101,10 +102,7 @@ impl Default for WhichModel {
 
 impl WhichModel {
     fn is_quantized(&self) -> bool {
-        match self {
-            Self::QuantizedTiny | Self::QuantizedTinyEn => true,
-            _ => false,
-        }
+        matches!(self, Self::QuantizedTiny | Self::QuantizedTinyEn)
     }
 
     fn is_multilingual(&self) -> bool {
@@ -212,7 +210,7 @@ pub fn vector_into_tokens(
     let encode = |n: &str| -> Vec<u32> {
         tokenizer
             .encode(n, false)
-            .expect(&format!("no token-id for {n}"))
+            .unwrap_or_else(|_| panic!("no token-id for {n}"))
             .get_ids()
             .to_vec()
     };
@@ -289,7 +287,6 @@ pub fn token_id(tokenizer: &Tokenizer, token: &str) -> InferenceResult<u32> {
         None => panic!("no token-id for {token}"),
         Some(id) => Ok::<u32, InferenceError>(id),
     }
-    .map_err(Into::into)
 }
 
 impl Whisper {
@@ -396,7 +393,7 @@ impl Whisper {
 }
 
 #[allow(dead_code)]
-fn debug_top_logits(tokenizer: &Tokenizer, logits_vec: &Vec<f32>, logits: Tensor) {
+fn debug_top_logits(tokenizer: &Tokenizer, logits_vec: &[f32], logits: Tensor) {
     // Create a vector of (logit value, token) pairs
     let mut indexed_logits: Vec<(f32, u32)> = logits_vec
         .iter()
@@ -549,9 +546,9 @@ impl SpeechRecognitionDecoder for Whisper {
                         // Strong penalty for immediate repetition
                         let penalty = repetition_penalty.powi(*frequency as i32);
                         logits_vec[token_idx] = if logits_vec[token_idx] < ZERO {
-                            logits_vec[token_idx] * penalty as f32
+                            logits_vec[token_idx] * penalty
                         } else {
-                            logits_vec[token_idx] / penalty as f32
+                            logits_vec[token_idx] / penalty
                         };
                     }
                 }

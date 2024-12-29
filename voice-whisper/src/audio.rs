@@ -156,7 +156,7 @@ fn log_mel_spectrogram_w(
                 sum += fft_out[k] * filters[j * n_fft + k];
                 k += 1;
             }
-            mel[j * n_len + i] = f32::max(sum, 1e-10 as f32).log10();
+            mel[j * n_len + i] = f32::max(sum, 1e-10).log10();
         }
     }
     mel
