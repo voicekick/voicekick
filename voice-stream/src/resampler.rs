@@ -51,7 +51,6 @@ impl Resampler {
         })
     }
 
-    #[allow(clippy::needless_range_loop)]
     pub fn process(&mut self, input: &[f32]) -> Vec<f32> {
         if input.is_empty() {
             return Vec::new();
@@ -81,14 +80,13 @@ impl Resampler {
         let required_frames = self.resampler.input_frames_next();
 
         let mut indata: Vec<Vec<f32>> = vec![vec![0.0; required_frames]; self.channels];
-
-        // Fill with actual data
-        for frame in 0..frames {
-            for ch in 0..self.channels {
-                let idx = frame * self.channels + ch;
-                if frame < required_frames {
-                    indata[ch][frame] = input[idx];
-                }
+        for (frame, chunk) in input
+            .chunks(self.channels)
+            .enumerate()
+            .take(required_frames)
+        {
+            for (ch, &sample) in chunk.iter().enumerate() {
+                indata[ch][frame] = sample;
             }
         }
 
