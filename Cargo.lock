@@ -391,6 +391,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "command-parser"
+version = "0.1.0"
+dependencies = [
+ "strsim",
+]
+
+[[package]]
 name = "console"
 version = "0.15.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -669,12 +676,6 @@ dependencies = [
  "bytemuck",
  "reborrow",
 ]
-
-[[package]]
-name = "earshot"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88d6e21bffead7abb6d9202cfb3285b34b2e750335d8cf3460b004f886c6f6db"
 
 [[package]]
 name = "either"
@@ -3211,7 +3212,6 @@ name = "voice-stream"
 version = "0.3.0"
 dependencies = [
  "cpal",
- "earshot",
  "rubato",
  "tokio",
  "tracing",
@@ -3223,6 +3223,7 @@ dependencies = [
 name = "voice-tests"
 version = "0.1.0"
 dependencies = [
+ "command-parser",
  "cpal",
  "inference-candle",
  "mel_spec",

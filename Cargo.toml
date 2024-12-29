@@ -6,7 +6,8 @@ members = [
   "voice-tests",
   "voicekick",
   "inference-candle",
-  "voice-whisper"
+  "voice-whisper",
+  "command-parser",
 ]
 
 [profile.release]
