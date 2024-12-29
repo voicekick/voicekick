@@ -339,18 +339,6 @@ impl Whisper {
             Some(n) => n,
         };
 
-        // let language_token = match (args.model.is_multilingual(), args.language) {
-        //     (true, None) => Some(multilingual::detect_language(&mut model, &tokenizer, &mel)?),
-        //     (false, None) => None,
-        //     (true, Some(language)) => match token_id(&tokenizer, &format!("<|{language}|>")) {
-        //         Ok(token_id) => Some(token_id),
-        //         Err(_) => anyhow::bail!("language {language} is not supported"),
-        //     },
-        //     (false, Some(_)) => {
-        //         anyhow::bail!("a language cannot be set for non-multilingual models")
-        //     }
-        // };
-
         let mel_bytes = match config.num_mel_bins {
             80 => include_bytes!("melfilters.bytes").as_slice(),
             128 => include_bytes!("melfilters128.bytes").as_slice(),
@@ -409,7 +397,7 @@ impl Whisper {
     }
 }
 
-#[allow(unsued)]
+#[allow(dead_code)]
 fn debug_top_logits(tokenizer: &Tokenizer, logits_vec: &Vec<f32>, logits: Tensor) {
     // Create a vector of (logit value, token) pairs
     let mut indexed_logits: Vec<(f32, u32)> = logits_vec

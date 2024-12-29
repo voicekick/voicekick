@@ -104,8 +104,9 @@ pub const SUPPORTED_LANGUAGES: [(&str, &str); 99] = [
     ("su", "sundanese"),
 ];
 
+#[allow(dead_code)]
 /// Returns the token id for the selected language.
-pub fn detect_language(
+pub(crate) fn detect_language(
     model: &mut super::Model,
     tokenizer: &Tokenizer,
     mel: &Tensor,
