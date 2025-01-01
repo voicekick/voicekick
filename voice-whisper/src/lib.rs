@@ -19,55 +19,15 @@ mod builder;
 mod multilingual;
 pub use builder::WhisperBuilder;
 
-const ZERO: f32 = 0.0;
-
 pub mod audio_params {
     // Sample rate
     pub const SAMPLE_RATE: usize = 16000;
-
-    /// For each FFT operation:
-    /// - Takes 400 samples window
-    /// - Overlaps by (400-128) = 272 samples with previous window
-    /// - Gives ~75% overlap between consecutive windows
-    /// - Results in 16000/128 ≈ 125 frames per second
-    /// Each window:
-    ///
-    /// |----400 samples----|
-    ///       |----400 samples----|
-    ///             |----400 samples----|
-    /// Moving by 128 samples each time
-    pub const N_FFT: usize = 400;
-
-    /// The overlap (N_FFT - HOP_LENGTH) helps capture smooth transitions and
-    /// transient features in the audio signal.
-    ///
-    /// Original: (400-128)/400 = 68% overlap
-    /// - 200;  // 50% overlap
-    /// - 300;  // 25% overlap
-    /// - 360;  // 10% overlap
-    ///
-    /// Tradeoff: larger HOP_LENGTH = faster processing but may miss audio transitions
-    /// Minimum recommended overlap is 25%
-    pub const HOP_LENGTH: usize = 160;
 
     /// For Whisper, preferred max segment sizes in mel spectrogram frames:
     /// - Optimal: 1500 frames (~30 seconds of audio)
     /// - Maximum supported: 3000 frames (~60 seconds)
     /// - Real-time recommended: 800-1000 frames (~16-20 seconds)
     pub const N_FRAMES_MAX: usize = 3000;
-
-    pub const NO_SPEECH_THRESHOLD: f64 = 0.7;
-    pub const LOGPROB_THRESHOLD: f64 = -1.5;
-
-    /// A good starting temperature for the Whisper model is typically around 0.7 to 1.0. This range allows for a balance between deterministic and diverse outputs:
-    /// - Lower temperatures (e.g., 0.5 or below) produce more consistent and predictable outputs, suitable for structured tasks where clarity is key.
-    /// - Higher temperatures (e.g., 1.0 and above) introduce more variability, allowing the model to generate more creative or varied responses.
-    ///
-    /// Start at 0.7 for balanced behavior and adjust based on whether you want more stability or diversity in your output.
-    // pub const TEMPERATURES: [f64; 7] = [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
-    pub const TEMPERATURES: [f64; 1] = [0.0];
-    // pub const TEMPERATURES: [f64; 11] = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
-    pub const COMPRESSION_RATIO_THRESHOLD: f64 = 2.4;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -147,6 +107,7 @@ impl WhichModel {
     }
 }
 
+/// Whisper model.
 pub enum Model {
     Normal(m::model::Whisper),
     Quantized(m::quantized_model::Whisper),
@@ -161,6 +122,7 @@ impl Model {
     }
 }
 
+/// Get the model filenames for the selected model.
 pub fn model_filenames(which_model: WhichModel) -> Result<(PathBuf, PathBuf, PathBuf), ApiError> {
     let (default_model, default_revision) = which_model.model_and_revision();
 
@@ -257,14 +219,13 @@ impl SpeechRecognitionModel for Model {
     }
 }
 
+/// Whisper model
 pub struct Whisper {
     device: Device,
     model: Model,
     config: Config,
     tokenizer: Tokenizer,
     mel_filters: Vec<f32>,
-
-    suppress_tokens: Tensor,
 
     sot_token: u32,
     transcribe_token: u32,
@@ -274,11 +235,27 @@ pub struct Whisper {
     no_timestamps_token: u32,
     language_token: Option<u32>,
 
+    suppress_tokens: Tensor,
     boost_tokens: Vec<u32>,
     command_tokens: Vec<u32>,
     penalty_tokens: Vec<u32>,
 
     temperatures: Vec<f64>,
+
+    // Mel
+    n_fft: usize,
+    hop_lengnth: usize,
+
+    // Boosts & penalties
+    repetition_penalty: f32,
+    repetition_frequency: usize,
+    boost_value: f32,
+    command_boost_value: f32,
+
+    // Thresholds
+    no_speech_threshold: f64,
+    logprob_threshold: f64,
+    compression_ratio_threshold: f64,
 }
 
 pub fn token_id(tokenizer: &Tokenizer, token: &str) -> InferenceResult<u32> {
@@ -301,77 +278,16 @@ impl Whisper {
         WhisperBuilder::new(device, config, model, tokenizer, language_token)
     }
 
-    /// Create a new decoder.
-    pub fn new(
-        device: Device,
-        config: Config,
-        model: Model,
-        tokenizer: Tokenizer,
-        language_token: Option<u32>,
-    ) -> InferenceResult<Self> {
-        let no_timestamps_token = token_id(&tokenizer, m::NO_TIMESTAMPS_TOKEN)?;
-        // Suppress the notimestamps token when in timestamps mode.
-        // https://github.com/openai/whisper/blob/e8622f9afc4eba139bf796c210f5c01081000472/whisper/decoding.py#L452
-        let suppress_tokens: Vec<f32> = (0..model.config().vocab_size as u32)
-            .map(|i| {
-                if model.config().suppress_tokens.contains(&i) || i == no_timestamps_token {
-                    f32::NEG_INFINITY
-                } else {
-                    ZERO
-                }
-            })
-            .collect();
-        let suppress_tokens = Tensor::new(suppress_tokens.as_slice(), &device)?;
-        let sot_token = token_id(&tokenizer, m::SOT_TOKEN)?;
-        let transcribe_token = token_id(&tokenizer, m::TRANSCRIBE_TOKEN)?;
-        let eot_token = token_id(&tokenizer, m::EOT_TOKEN)?;
-        let no_speech_token = m::NO_SPEECH_TOKENS
-            .iter()
-            .find_map(|token| token_id(&tokenizer, token).ok());
-        let no_speech_token = match no_speech_token {
-            // TODO: replace panic with bail! ?
-            None => panic!("unable to find any non-speech token"),
-            Some(n) => n,
-        };
-
-        let mel_bytes = match config.num_mel_bins {
-            80 => include_bytes!("melfilters.bytes").as_slice(),
-            128 => include_bytes!("melfilters128.bytes").as_slice(),
-            nmel => panic!("unexpected num_mel_bins {nmel}"),
-        };
-        let mut mel_filters = vec![ZERO; mel_bytes.len() / 4];
-        <byteorder::LittleEndian as byteorder::ByteOrder>::read_f32_into(
-            mel_bytes,
-            &mut mel_filters,
-        );
-
-        let space_token = vector_into_tokens(&tokenizer, &[" "], None)[0];
-
-        Ok(Self {
-            device,
-            model,
-            config,
-            mel_filters,
-            tokenizer,
-            suppress_tokens,
-            sot_token,
-            transcribe_token,
-            eot_token,
-            space_token,
-            no_speech_token,
-            language_token,
-            no_timestamps_token,
-            boost_tokens: vec![],
-            command_tokens: vec![],
-            penalty_tokens: vec![],
-            temperatures: audio_params::TEMPERATURES.to_vec(),
-        })
-    }
-
     /// Convert samples into mel spectrogram.
     pub fn pcm_to_mel(&self, pcm: &[f32]) -> InferenceResult<Tensor> {
         let pcm_len = pcm.len();
-        let mel = audio::pcm_to_mel(&self.config, pcm, &self.mel_filters);
+        let mel = audio::pcm_to_mel(
+            &self.config,
+            pcm,
+            &self.mel_filters,
+            self.n_fft,
+            self.hop_lengnth,
+        );
         let mel_len = mel.len();
         let num_mel_bins = self.config.num_mel_bins;
         let shape_size = mel_len / num_mel_bins;
@@ -437,40 +353,36 @@ impl SpeechRecognitionDecoder for Whisper {
         let mut sum_logprob: f64 = 0.0;
         let mut no_speech_prob = f64::NAN;
 
-        // Track token frequencies for repetition penalty
+        // 2. Track token frequencies for repetition penalty
         let mut token_frequencies: HashMap<u32, usize> = HashMap::new();
-        let repetition_penalty: f32 = 4.2; // Adjust this value to control penalty strength
-        let repetition_frequency = 3; // Adjust this value to control how many times a token must appear before penalty is applied
 
         let mut inc_freq = |token: u32| {
             *token_frequencies.entry(token).or_insert(0) += 1;
         };
 
-        // Create boost mask
-        let boost_value = 2.0f32; // Adjust this value to control how much we favor word numbers
-
-        let command_boost_value = 3.0f32; // Adjust this value to control how much we favor commands
-
-        // 2. Token tracking
+        // Token tracking
         let mut last_tokens: [u32; 3] = [0, 0, 0];
 
         // 3. Create initial token sequence
         // The tokens must be in a specific sequence that matches how the model was trained:
-        // - Start with SOT token
-        // - Language token (if multilingual model)
-        // - Task token (transcribe)
-        // - Settings tokens (notimestamps)
-        let mut tokens = vec![self.sot_token];
+        let mut tokens = vec![
+            // - 1. Start with SOT token
+            self.sot_token,
+            // - 2.? Language token (if multilingual model)
+            //
+            // - 3. Task token (transcribe)
+            self.transcribe_token,
+            // - 4. Settings tokens (notimestamps)
+            self.no_timestamps_token,
+        ];
         inc_freq(self.sot_token);
+        inc_freq(self.transcribe_token);
+        inc_freq(self.no_timestamps_token);
 
         if let Some(language_token) = self.language_token {
-            tokens.push(language_token);
+            tokens.insert(1, language_token);
             inc_freq(language_token);
         }
-        tokens.push(self.transcribe_token);
-        inc_freq(self.transcribe_token);
-        tokens.push(self.no_timestamps_token);
-        inc_freq(self.no_timestamps_token);
 
         // 4. Create combined mask once (not repeatedly)
         let mask = {
@@ -495,7 +407,7 @@ impl SpeechRecognitionDecoder for Whisper {
             for &token in self.boost_tokens.iter().filter(|t| *t < &dims1) {
                 m = m.slice_assign(
                     &[token as usize..=token as usize],
-                    &Tensor::new(&[boost_value], mel.device())?,
+                    &Tensor::new(&[self.boost_value], mel.device())?,
                 )?;
             }
 
@@ -503,7 +415,7 @@ impl SpeechRecognitionDecoder for Whisper {
             for &token in self.command_tokens.iter().filter(|t| *t < &dims1) {
                 m = m.slice_assign(
                     &[token as usize..=token as usize],
-                    &Tensor::new(&[command_boost_value], mel.device())?,
+                    &Tensor::new(&[self.command_boost_value], mel.device())?,
                 )?;
             }
 
@@ -540,12 +452,12 @@ impl SpeechRecognitionDecoder for Whisper {
             // Apply repetition penalty only for tokens that repeat at lot
             for (token, frequency) in &token_frequencies {
                 // Only penalize if this token matches the last token and has been used
-                if *frequency > repetition_frequency {
+                if *frequency > self.repetition_frequency {
                     let token_idx = *token as usize;
                     if token_idx < logits_vec.len() {
                         // Strong penalty for immediate repetition
-                        let penalty = repetition_penalty.powi(*frequency as i32);
-                        logits_vec[token_idx] = if logits_vec[token_idx] < ZERO {
+                        let penalty = self.repetition_penalty.powi(*frequency as i32);
+                        logits_vec[token_idx] = if logits_vec[token_idx] < 0.0 {
                             logits_vec[token_idx] * penalty
                         } else {
                             logits_vec[token_idx] / penalty
@@ -643,10 +555,10 @@ impl SpeechRecognitionDecoder for Whisper {
                 Ok(dr) => {
                     let needs_fallback = dr
                         .compression_ratio
-                        .map(|cr| cr > audio_params::COMPRESSION_RATIO_THRESHOLD)
+                        .map(|cr| cr > self.compression_ratio_threshold)
                         .unwrap_or(true)
-                        || dr.avg_logprob < audio_params::LOGPROB_THRESHOLD;
-                    if !needs_fallback || dr.no_speech_prob > audio_params::NO_SPEECH_THRESHOLD {
+                        || dr.avg_logprob < self.logprob_threshold;
+                    if !needs_fallback || dr.no_speech_prob > self.no_speech_threshold {
                         return Ok(dr);
                     }
                 }
@@ -660,17 +572,6 @@ impl SpeechRecognitionDecoder for Whisper {
 
     fn segments(&mut self, mel: &Tensor) -> InferenceResult<Vec<proto::Segment>> {
         let (_, _, content_frames) = mel.dims3()?;
-
-        // For very short content, process as single chunk
-        if content_frames <= audio_params::N_FRAMES_MAX {
-            let dr = self.decode_with_fallback(mel)?;
-            return Ok(vec![Segment {
-                start: 0.0,
-                duration: (content_frames * audio_params::HOP_LENGTH) as f64
-                    / audio_params::SAMPLE_RATE as f64,
-                dr,
-            }]);
-        }
 
         let mut seek = 0;
         let mut segments = vec![];
@@ -694,15 +595,15 @@ impl SpeechRecognitionDecoder for Whisper {
             seek += segment_size;
 
             // no > 0.6 && avg < -1.0
-            if dr.no_speech_prob > audio_params::NO_SPEECH_THRESHOLD
-                && dr.avg_logprob < audio_params::LOGPROB_THRESHOLD
+            if dr.no_speech_prob > self.no_speech_threshold
+                && dr.avg_logprob < self.logprob_threshold
             {
                 debug!("no speech detected, skipping {seek} {dr:?}");
                 continue;
             }
             let segment = Segment {
-                start: (seek * audio_params::HOP_LENGTH) as f64 / audio_params::SAMPLE_RATE as f64,
-                duration: (segment_size * audio_params::HOP_LENGTH) as f64
+                start: (seek * self.hop_lengnth) as f64 / audio_params::SAMPLE_RATE as f64,
+                duration: (segment_size * self.hop_lengnth) as f64
                     / audio_params::SAMPLE_RATE as f64,
                 dr,
             };

@@ -9,8 +9,6 @@ use std::sync::Arc;
 use std::thread;
 use tracing::debug;
 
-use crate::audio_params::{HOP_LENGTH, N_FFT};
-
 const TWO_PI: f32 = PI + PI;
 const ZERO: f32 = 0.0;
 const HALF: f32 = 0.5;
@@ -264,8 +262,14 @@ fn log_mel_spectrogram(
 }
 
 /// Convert PCM samples to Mel spectrogram
-pub fn pcm_to_mel(cfg: &super::Config, samples: &[f32], filters: &[f32]) -> Vec<f32> {
-    log_mel_spectrogram(samples, filters, N_FFT, HOP_LENGTH, cfg.num_mel_bins, false)
+pub fn pcm_to_mel(
+    cfg: &super::Config,
+    samples: &[f32],
+    filters: &[f32],
+    n_fft: usize,
+    hop_length: usize,
+) -> Vec<f32> {
+    log_mel_spectrogram(samples, filters, n_fft, hop_length, cfg.num_mel_bins, false)
 }
 
 #[cfg(test)]

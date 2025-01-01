@@ -53,15 +53,14 @@ async fn main() -> Result<(), VoiceInputError> {
             match rx.recv() {
                 Ok(samples) => {
                     println!("Received samples: {}", samples.len());
-                    match whisper.pcm_to_mel(&samples) {
-                        Ok(mel) => {
-                            whisper.segments(&mel);
+                    match whisper.with_mel_segments(&samples) {
+                        Ok(segments) => {
                             // let got = whisper.decode_with_fallback(&mel);
 
                             // println!("{:?}", got);
                         }
                         Err(e) => {
-                            print!("pcm_to_mel error {:?}", e);
+                            print!("with_mel_segments error {:?}", e);
                         }
                     }
 
