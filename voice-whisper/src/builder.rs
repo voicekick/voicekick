@@ -55,7 +55,6 @@ pub struct WhisperBuilder {
     command_boost_value: f32,
     no_speech_threshold: f64,
     logprob_threshold: f64,
-    compression_ratio_threshold: f64,
 }
 
 impl WhisperBuilder {
@@ -140,7 +139,6 @@ impl WhisperBuilder {
             command_boost_value: 3.0,
             no_speech_threshold: 0.7,
             logprob_threshold: -1.5,
-            compression_ratio_threshold: 2.4,
         }
     }
 
@@ -279,12 +277,6 @@ impl WhisperBuilder {
         self
     }
 
-    /// Adjust this value to control the threshold for compression ratio
-    pub fn compression_ratio_threshold(mut self, threshold: f64) -> Self {
-        self.compression_ratio_threshold = threshold;
-        self
-    }
-
     /// For each FFT operation:
     /// - Takes 400 samples window
     /// - Overlaps by (400-128) = 272 samples with previous window
@@ -385,7 +377,6 @@ impl WhisperBuilder {
             command_boost_value: self.command_boost_value,
             no_speech_threshold: self.no_speech_threshold,
             logprob_threshold: self.logprob_threshold,
-            compression_ratio_threshold: self.compression_ratio_threshold,
         };
 
         Ok(whisper)

@@ -255,7 +255,6 @@ pub struct Whisper {
     // Thresholds
     no_speech_threshold: f64,
     logprob_threshold: f64,
-    compression_ratio_threshold: f64,
 }
 
 pub fn token_id(tokenizer: &Tokenizer, token: &str) -> InferenceResult<u32> {
@@ -537,7 +536,6 @@ impl SpeechRecognitionDecoder for Whisper {
             avg_logprob,
             no_speech_prob,
             temperature,
-            compression_ratio: None,
         })
     }
 
@@ -553,11 +551,7 @@ impl SpeechRecognitionDecoder for Whisper {
             // On errors, we try again with a different temperature.
             match dr {
                 Ok(dr) => {
-                    let needs_fallback = dr
-                        .compression_ratio
-                        .map(|cr| cr > self.compression_ratio_threshold)
-                        .unwrap_or(true)
-                        || dr.avg_logprob < self.logprob_threshold;
+                    let needs_fallback = dr.avg_logprob < self.logprob_threshold;
                     if !needs_fallback || dr.no_speech_prob > self.no_speech_threshold {
                         return Ok(dr);
                     }

@@ -11,8 +11,6 @@ pub struct DecodingResult {
     pub no_speech_prob: f64,
     /// Temperature
     pub temperature: f64,
-    /// Compression ratio
-    pub compression_ratio: Option<f64>,
 }
 
 /// Represents a segment of the input audio.
