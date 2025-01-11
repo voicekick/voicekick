@@ -1,4 +1,5 @@
-use std::{collections::HashMap, path::PathBuf};
+use core::fmt;
+use std::{collections::HashMap, ops::Deref, path::PathBuf};
 
 use candle_core::{Device, IndexOp, Shape, Tensor};
 use candle_nn::ops::softmax;
@@ -12,12 +13,13 @@ use inference_candle::{
     InferenceError, InferenceResult, SpeechRecognitionDecoder, SpeechRecognitionModel,
 };
 use tokenizers::Tokenizer;
-use tracing::debug;
+use tracing::{debug, error, warn};
 
 mod audio;
 mod builder;
 mod multilingual;
 pub use builder::WhisperBuilder;
+pub use multilingual::SUPPORTED_LANGUAGES;
 
 pub mod audio_params {
     // Sample rate
@@ -54,6 +56,90 @@ pub enum WhichModel {
     QuantizedTinyEn,
 }
 
+// Create to Iter for WhichModel
+impl WhichModel {
+    pub fn iter() -> impl Iterator<Item = WhichModel> {
+        [
+            WhichModel::TinyEn,
+            WhichModel::BaseEn,
+            WhichModel::SmallEn,
+            WhichModel::MediumEn,
+            WhichModel::Tiny,
+            WhichModel::Base,
+            WhichModel::Small,
+            WhichModel::Medium,
+            WhichModel::Large,
+            WhichModel::LargeV2,
+            WhichModel::LargeV3,
+            WhichModel::LargeV3Turbo,
+            WhichModel::DistilMediumEn,
+            WhichModel::DistilLargeV2,
+            WhichModel::DistilLargeV3,
+            WhichModel::QuantizedTiny,
+            WhichModel::QuantizedTinyEn,
+        ]
+        .iter()
+        .copied()
+    }
+}
+
+impl fmt::Display for WhichModel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.deref())
+    }
+}
+
+impl From<&str> for WhichModel {
+    fn from(s: &str) -> Self {
+        match s {
+            "TinyEn" => WhichModel::TinyEn,
+            "BaseEn" => WhichModel::BaseEn,
+            "SmallEn" => WhichModel::SmallEn,
+            "MediumEn" => WhichModel::MediumEn,
+            "Tiny" => WhichModel::Tiny,
+            "Base" => WhichModel::Base,
+            "Small" => WhichModel::Small,
+            "Medium" => WhichModel::Medium,
+            "Large" => WhichModel::Large,
+            "LargeV2" => WhichModel::LargeV2,
+            "LargeV3" => WhichModel::LargeV3,
+            "LargeV3Turbo" => WhichModel::LargeV3Turbo,
+            "DistilMediumEn" => WhichModel::DistilMediumEn,
+            "DistilLargeV2" => WhichModel::DistilLargeV2,
+            "DistilLargeV3" => WhichModel::DistilLargeV3,
+            "QuantizedTiny" => WhichModel::QuantizedTiny,
+            "QuantizedTinyEn" => WhichModel::QuantizedTinyEn,
+            _ => panic!("Unknown model: {s}"),
+        }
+    }
+}
+
+impl Deref for WhichModel {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        match self {
+            WhichModel::TinyEn => "TinyEn",
+            WhichModel::BaseEn => "BaseEn",
+            WhichModel::SmallEn => "SmallEn",
+            WhichModel::MediumEn => "MediumEn",
+            WhichModel::Tiny => "Tiny",
+            WhichModel::Base => "Base",
+            WhichModel::Small => "Small",
+            WhichModel::Medium => "Medium",
+            WhichModel::Large => "Large",
+            WhichModel::LargeV2 => "LargeV2",
+            WhichModel::LargeV3 => "LargeV3",
+            WhichModel::LargeV3Turbo => "LargeV3Turbo",
+            WhichModel::DistilMediumEn => "DistilMediumEn",
+            WhichModel::DistilLargeV2 => "DistilLargeV2",
+            WhichModel::DistilLargeV3 => "DistilLargeV3",
+            WhichModel::QuantizedTiny => "QuantizedTiny",
+            WhichModel::QuantizedTinyEn => "QuantizedTinyEn",
+        }
+    }
+}
+
 impl Default for WhichModel {
     fn default() -> Self {
         Self::TinyEn
@@ -65,7 +151,8 @@ impl WhichModel {
         matches!(self, Self::QuantizedTiny | Self::QuantizedTinyEn)
     }
 
-    fn is_multilingual(&self) -> bool {
+    /// Check if the model is multilingual.
+    pub fn is_multilingual(&self) -> bool {
         match self {
             Self::Tiny
             | Self::Base
@@ -554,10 +641,12 @@ impl SpeechRecognitionDecoder for Whisper {
                     let needs_fallback = dr.avg_logprob < self.logprob_threshold;
                     if !needs_fallback || dr.no_speech_prob > self.no_speech_threshold {
                         return Ok(dr);
+                    } else {
+                        warn!("Decoding with temperature {t} failed to pass no_speech or logprob, retry with next temperature {:#?}", dr);
                     }
                 }
                 Err(err) => {
-                    println!("Error running at {t}: {err}")
+                    error!("Error running at {t}: {err}")
                 }
             }
         }
