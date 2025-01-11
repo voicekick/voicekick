@@ -1,25 +1,29 @@
-[workspace]
-resolver = "2"
-
-members = [
-  "voice-stream",
-  "voice-tests",
-  "voicekick",
-  "inference-candle",
-  "voice-whisper",
-  "command-parser",
-]
-
 [profile.release]
 opt-level = 3
-lto = true              # Sets link-time optimization.
+lto = true
 codegen-units = 1
-debug = false             # Include debug info.
-debug-assertions = false  # Enables debug assertions.
+debug = 0
+debug-assertions = false
+panic = "abort"
 overflow-checks = false
-panic = 'abort'         # The panic strategy.
-incremental = true       # Incremental compilation.
+incremental = true
 strip = true
+
+[workspace]
+members = [
+    "command-parser",
+    "inference-candle",
+    "voice-stream",
+    "voice-tests",
+    "voice-whisper",
+    "voicekick",
+]
+
+exclude = [
+    "voicekick-dioxus",
+]
+
+resolver = "2"
 
 [workspace.dependencies]
 tracing = "0.1.40"
