@@ -1,7 +1,8 @@
 use hound::{WavSpec, WavWriter};
 use std::fs;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 use tokio::io::{self, AsyncBufReadExt, BufReader};
+use tokio::sync::mpsc;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::EnvFilter;
 use voice_stream::cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -55,7 +56,7 @@ async fn main() -> Result<(), VoiceInputError> {
     ));
     let wav_writer_clone = wav_writer.clone();
 
-    let (tx, rx) = mpsc::channel();
+    let (tx, mut rx) = mpsc::unbounded_channel();
     let input_sound = VoiceStreamBuilder::new(config, device, tx).build()?;
 
     // Constants for buffer management
@@ -63,8 +64,8 @@ async fn main() -> Result<(), VoiceInputError> {
 
     tokio::spawn(async move {
         loop {
-            match rx.recv() {
-                Ok(samples) => {
+            match rx.recv().await {
+                Some(samples) => {
                     let mut buffer = sample_buffer_clone.lock().unwrap();
                     buffer.extend(samples);
 
@@ -83,9 +84,7 @@ async fn main() -> Result<(), VoiceInputError> {
                         buffer.clear(); // Clear buffer after processing
                     }
                 }
-                Err(e) => {
-                    print!("Error = {:?}", e);
-                }
+                _ => {}
             }
         }
     });

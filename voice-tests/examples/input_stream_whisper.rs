@@ -1,6 +1,5 @@
-use std::sync::mpsc;
-
 use tokio::io::{self, AsyncBufReadExt, BufReader};
+use tokio::sync::mpsc;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::EnvFilter;
 use voice_stream::cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -42,7 +41,7 @@ async fn main() -> Result<(), VoiceInputError> {
         println!("Supported input config: {:?}", supported_config);
     }
 
-    let (tx, rx) = mpsc::channel();
+    let (tx, mut rx) = mpsc::unbounded_channel();
     let input_sound = VoiceStreamBuilder::new(config, device, tx).build()?;
 
     let mut whisper =
@@ -50,8 +49,8 @@ async fn main() -> Result<(), VoiceInputError> {
 
     tokio::spawn(async move {
         loop {
-            match rx.recv() {
-                Ok(samples) => {
+            match rx.recv().await {
+                Some(samples) => {
                     println!("Received samples: {}", samples.len());
                     match whisper.with_mel_segments(&samples) {
                         Ok(segments) => {
@@ -66,9 +65,7 @@ async fn main() -> Result<(), VoiceInputError> {
 
                     //
                 }
-                Err(e) => {
-                    print!("Error = {:?}", e);
-                }
+                _ => {}
             }
         }
     });

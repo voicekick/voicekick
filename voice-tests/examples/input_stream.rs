@@ -1,4 +1,4 @@
-use std::sync::mpsc;
+use tokio::sync::mpsc;
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 
 use tokio::io::{self, AsyncBufReadExt, BufReader};
@@ -38,18 +38,16 @@ async fn main() -> Result<(), VoiceInputError> {
         println!("Supported input config: {:?}", supported_config);
     }
 
-    let (tx, rx) = mpsc::channel();
+    let (tx, mut rx) = mpsc::unbounded_channel();
     let input_sound = VoiceStreamBuilder::new(config, device, tx).build()?;
 
     tokio::spawn(async move {
         loop {
-            match rx.recv() {
-                Ok(samples) => {
+            match rx.recv().await {
+                Some(samples) => {
                     println!("{:?}", samples);
                 }
-                Err(e) => {
-                    print!("Error = {:?}", e);
-                }
+                _ => {}
             }
         }
     });

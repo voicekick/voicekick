@@ -57,6 +57,10 @@ impl SoundStream {
                         if let Err(e) = sender.send(detected_voice) {
                             eprintln!("Failed to send voice data: {:?}", e);
                         }
+                    } else {
+                        if let Err(e) = sender.send(vec![]) {
+                            eprintln!("Failed to send voice data: {:?}", e);
+                        }
                     }
                 }
             }
@@ -77,6 +81,10 @@ impl SoundStream {
                         self.output_buffer.drain(..self.buffer_size).collect();
                     if let Some(detected_voice) = self.voice_detection.add_samples(voice_chunk) {
                         if let Err(e) = sender.send(detected_voice) {
+                            eprintln!("Failed to send voice data: {:?}", e);
+                        }
+                    } else {
+                        if let Err(e) = sender.send(vec![]) {
                             eprintln!("Failed to send voice data: {:?}", e);
                         }
                     }

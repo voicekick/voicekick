@@ -1,9 +1,8 @@
-use std::sync::mpsc;
-
 use cpal::StreamConfig;
 use ringbuf::traits::{Consumer, Producer, Split};
 use ringbuf::HeapRb;
 use tokio::io::{self, AsyncBufReadExt, BufReader};
+use tokio::sync::mpsc;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::EnvFilter;
 use voice_stream::cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -75,15 +74,15 @@ async fn main() -> Result<(), VoiceInputError> {
         producer.try_push(0.0).unwrap();
     }
 
-    let (tx, rx) = mpsc::channel();
+    let (tx, mut rx) = mpsc::unbounded_channel();
     let input_sound = VoiceStreamBuilder::new(supported_config, input_device, tx).build()?;
 
     tokio::spawn(async move {
         let mut output_fell_behind = false;
 
         loop {
-            match rx.recv() {
-                Ok(samples) => {
+            match rx.recv().await {
+                Some(samples) => {
                     for sample in samples {
                         if let Err(e) = producer.try_push(sample) {
                             output_fell_behind = true;
@@ -91,9 +90,7 @@ async fn main() -> Result<(), VoiceInputError> {
                         }
                     }
                 }
-                Err(e) => {
-                    print!("Error = {:?}", e);
-                }
+                _ => {}
             }
 
             if output_fell_behind {

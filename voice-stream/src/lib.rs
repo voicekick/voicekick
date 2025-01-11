@@ -7,17 +7,15 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Device, PauseStreamError, PlayStreamError, SampleFormat, StreamConfig, SupportedStreamConfig,
 };
-use std::{
-    sync::mpsc::{self, Receiver, Sender},
-    time::Duration,
-};
+use std::time::Duration;
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use traits::IntoF32;
 use voice::{VoiceDetection, SILERO_VAD_VOICE_THRESHOLD};
 
 use std::error::Error as StdError;
 
-pub type InputSoundSender = Sender<Vec<f32>>;
-pub type InputSoundReceiver = Receiver<Vec<f32>>;
+pub type InputSoundSender = UnboundedSender<Vec<f32>>;
+pub type InputSoundReceiver = UnboundedReceiver<Vec<f32>>;
 pub type InputSoundChannel = (InputSoundSender, InputSoundReceiver);
 
 pub type VoiceInputError = Box<dyn StdError + Send + Sync>;
@@ -52,6 +50,36 @@ where
 pub fn samples_to_duration(samples: usize, sample_rate: Option<f64>) -> Duration {
     let seconds = samples as f64 / sample_rate.unwrap_or(SAMPLE_RATE as f64);
     Duration::from_secs_f64(seconds)
+}
+
+pub fn default_input_device() -> Option<String> {
+    let host = cpal::default_host();
+
+    // Set up the input device and stream with the default input config.
+    host.default_input_device().map(|device| {
+        device
+            .name()
+            .map(|x| x.to_string())
+            .unwrap_or("N/A".to_string())
+    })
+}
+
+/// CPAL input devices
+pub fn input_devices() -> Result<Vec<String>, String> {
+    let host = cpal::default_host();
+
+    let devices = host
+        .input_devices()
+        .map_err(|e| e.to_string())?
+        .map(|device| {
+            device
+                .name()
+                .map(|x| x.to_string())
+                .unwrap_or("N/A".to_string())
+        })
+        .collect();
+
+    Ok(devices)
 }
 
 /// Voice input stream builder
@@ -154,6 +182,9 @@ pub struct VoiceStream {
     input_stream: Box<dyn StreamTrait>,
 }
 
+unsafe impl Send for VoiceStream {}
+unsafe impl Sync for VoiceStream {}
+
 impl VoiceStream {
     /// Initialize input sound handler
     pub fn default_device() -> VoiceInputResult<(Self, InputSoundReceiver)> {
@@ -168,7 +199,7 @@ impl VoiceStream {
             .default_input_config()
             .expect("Failed to get default input config");
 
-        let (tx, receiver) = mpsc::channel();
+        let (tx, receiver) = mpsc::unbounded_channel();
 
         Ok((
             VoiceStreamBuilder::new(config, device, tx).build()?,

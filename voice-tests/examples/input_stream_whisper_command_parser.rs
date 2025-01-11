@@ -1,9 +1,11 @@
+use command_parser::CommandParserBuilder;
 use tokio::io::{self, AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::EnvFilter;
 use voice_stream::cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use voice_stream::{samples_to_duration, VoiceInputError, VoiceStreamBuilder};
+use voice_stream::{VoiceInputError, VoiceStreamBuilder};
+use voice_whisper::WhichModel;
 
 #[tokio::main]
 async fn main() -> Result<(), VoiceInputError> {
@@ -41,15 +43,50 @@ async fn main() -> Result<(), VoiceInputError> {
     let (tx, mut rx) = mpsc::unbounded_channel();
     let input_sound = VoiceStreamBuilder::new(config, device, tx).build()?;
 
+    let mut whisper =
+        voice_whisper::WhisperBuilder::infer(WhichModel::BaseEn, Some("en"))?.build()?;
+
     tokio::spawn(async move {
+        let parser = CommandParserBuilder::new()
+            .register_namespace("test", Some(1)) // Toleration for one character difference
+            .register_command("test", "backwards command", |input: &str| {
+                println!("Command: {:?}", input);
+            })
+            .unwrap()
+            .build();
+
         loop {
             match rx.recv().await {
                 Some(samples) => {
-                    println!(
-                        "Received samples Vec<f32> of length {} duration {}ms",
-                        samples.len(),
-                        samples_to_duration(samples.len(), None).as_millis()
-                    );
+                    println!("Received samples: {}", samples.len());
+                    match whisper.with_mel_segments(&samples) {
+                        Ok(segments) => {
+                            for segment in segments {
+                                let text = segment.dr.text.as_str();
+
+                                if text.is_empty() {
+                                    println!("Empty text");
+                                    continue;
+                                } else {
+                                    println!("Text {text}");
+                                }
+
+                                match parser.parse(text) {
+                                    Ok((func, arg)) => {
+                                        func(&arg);
+
+                                        //
+                                    }
+                                    Err(e) => {
+                                        print!("parser error {:?}", e);
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            print!("segments error {:?}", e);
+                        }
+                    }
                 }
                 _ => {}
             }
