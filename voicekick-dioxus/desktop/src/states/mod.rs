@@ -29,6 +29,13 @@ impl Default for VoiceState {
 pub struct WhisperConfigState {
     pub current_model: Signal<WhichModel>,
     pub current_language: Signal<String>,
+    pub temperature: Signal<f64>,
+    pub repetition_penalty: Signal<f32>,
+    pub repetition_frequency: Signal<usize>,
+    pub boost_value: Signal<f32>,
+    pub command_boost_value: Signal<f32>,
+    pub no_speech_threshold: Signal<f64>,
+    pub logprob_threshold: Signal<f64>,
 }
 
 impl Default for WhisperConfigState {
@@ -36,6 +43,13 @@ impl Default for WhisperConfigState {
         Self {
             current_model: Signal::new(WhichModel::default()),
             current_language: Signal::new(SUPPORTED_LANGUAGES[0].0.to_string()),
+            temperature: Signal::new(0.0),
+            repetition_penalty: Signal::new(4.2),
+            repetition_frequency: Signal::new(3),
+            boost_value: Signal::new(2.0),
+            command_boost_value: Signal::new(3.0),
+            no_speech_threshold: Signal::new(0.7),
+            logprob_threshold: Signal::new(-1.5),
         }
     }
 }

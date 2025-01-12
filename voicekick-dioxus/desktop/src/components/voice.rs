@@ -12,8 +12,11 @@ pub fn VoiceComponent() -> Element {
     let devices = use_signal(|| input_devices().unwrap_or_default());
 
     let handle_device_change = move |evt: Event<FormData>| {
-        voice_command_task.send(VoiceKickCommand::SetInputDevice(evt.value()));
-        voice_state.selected_input_device.set(evt.value());
+        let new_value = evt.value();
+        if *voice_state.selected_input_device.read() != new_value {
+            voice_state.selected_input_device.set(new_value);
+            voice_command_task.send(VoiceKickCommand::UpdateVoiceStream);
+        }
     };
 
     let options_rendered = devices.iter().map(|device| {
@@ -27,18 +30,20 @@ pub fn VoiceComponent() -> Element {
 
     let handle_threshold_change = move |evt: Event<FormData>| {
         if let Ok(value) = evt.value().parse::<f32>() {
-            voice_command_task.send(VoiceKickCommand::SetSileroVoiceThreshold(value));
-            voice_state.silero_voice_threshold.set(value);
+            if *voice_state.silero_voice_threshold.read() != value {
+                voice_state.silero_voice_threshold.set(value);
+                voice_command_task.send(VoiceKickCommand::UpdateVoiceStream);
+            }
         }
     };
 
     let toggle_recording = move |_| {
         if *voice_state.is_recording.read() {
-            voice_command_task.send(VoiceKickCommand::Pause);
             voice_state.is_recording.set(false);
+            voice_command_task.send(VoiceKickCommand::Pause);
         } else {
-            voice_command_task.send(VoiceKickCommand::Record);
             voice_state.is_recording.set(true);
+            voice_command_task.send(VoiceKickCommand::Record);
         }
     };
 

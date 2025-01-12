@@ -88,7 +88,7 @@ pub fn WaveformComponent() -> Element {
                         }
                         span {
                             class: "temperature segment-metric",
-                            "Temperature: {segment.dr.temperature}"
+                            "Temperature: {segment.dr.temperature:.2}"
                         }
                     }
                 }

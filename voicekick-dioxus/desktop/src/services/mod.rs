@@ -1,21 +1,24 @@
+use std::sync::Arc;
+
 use dioxus::{
     hooks::{use_context, UnboundedReceiver},
-    signals::{ReadableVecExt, WritableVecExt},
+    signals::{Readable, ReadableVecExt, WritableVecExt},
 };
 use futures_util::StreamExt;
-use tokio::sync::mpsc::{self, error::TryRecvError};
+use tokio::sync::{
+    mpsc::{self, error::TryRecvError},
+    Mutex,
+};
 use voice_stream::{
     cpal::{
         self,
         traits::{DeviceTrait, HostTrait, StreamTrait},
     },
-    default_input_device,
-    voice::SILERO_VAD_VOICE_THRESHOLD,
     InputSoundSender, VoiceStream, VoiceStreamBuilder,
 };
-use voice_whisper::{WhichModel, Whisper, WhisperBuilder};
+use voice_whisper::{Whisper, WhisperBuilder};
 
-use crate::states::VoiceState;
+use crate::states::{VoiceState, WhisperConfigState};
 
 pub fn new_voice_stream(
     selected_device: &str,
@@ -40,41 +43,52 @@ pub fn new_voice_stream(
         .map_err(|e| e.to_string())
 }
 
-fn new_whisper(model: WhichModel, lang: &str) -> Whisper {
-    let language = model.is_multilingual().then(|| lang);
-
-    WhisperBuilder::infer(model, language)
-        .expect("TODO: fix")
-        .build()
-        .expect("TODO: fix")
-}
-
 #[derive(Debug)]
 pub enum VoiceKickCommand {
     Record,
     Pause,
-    SetInputDevice(String),
-    SetSileroVoiceThreshold(f32),
-    SetWhisperModel(WhichModel),
-    SetWhisperLanguage(String),
+    UpdateVoiceStream,
+    UpdateWhisper,
 }
 
 pub async fn voicekick_service(mut rx: UnboundedReceiver<VoiceKickCommand>) {
     let (samples_tx, mut samples_rx) = mpsc::unbounded_channel::<Vec<f32>>();
     let mut voice_state = use_context::<VoiceState>();
+    let whisper_config_state = use_context::<WhisperConfigState>();
 
-    let mut current_device: String = default_input_device().unwrap_or("".to_string());
+    let mut voice_stream = new_voice_stream(
+        &voice_state.selected_input_device.read(),
+        samples_tx.clone(),
+        voice_state.silero_voice_threshold.read().clone(),
+    )
+    .expect("TODO: fix");
 
-    let mut silero_voice_threshold = SILERO_VAD_VOICE_THRESHOLD;
+    let new_whisper = || -> Whisper {
+        let current_model = *whisper_config_state.current_model.read();
+        let language = current_model
+            .is_multilingual()
+            .then(|| whisper_config_state.current_language.read().clone());
 
-    let mut voice_stream =
-        new_voice_stream(&current_device, samples_tx.clone(), silero_voice_threshold)
-            .expect("TODO: fix");
+        println!("WHISPER STATE {:?}", whisper_config_state);
 
-    let mut current_model = WhichModel::default();
-    let mut current_language = String::new();
+        WhisperBuilder::infer(
+            *whisper_config_state.current_model.read(),
+            language.as_deref(),
+        )
+        .expect("TODO: fix")
+        .temperatures(vec![whisper_config_state.temperature.read().clone()])
+        .repetition_penalty(whisper_config_state.repetition_penalty.read().clone())
+        .repetition_frequency(whisper_config_state.repetition_frequency.read().clone())
+        .boost_value(whisper_config_state.boost_value.read().clone())
+        .command_boost_value(whisper_config_state.command_boost_value.read().clone())
+        .no_speech_threshold(whisper_config_state.no_speech_threshold.read().clone())
+        .logprob_threshold(whisper_config_state.logprob_threshold.read().clone())
+        .build()
+        .expect("TODO: fix")
+    };
 
-    let mut whisper = new_whisper(current_model, &current_language);
+    let whisper = Arc::new(Mutex::new(new_whisper()));
+    let whisper_clone = whisper.clone();
 
     tokio::spawn(async move {
         const MAX_RAW_SAMPLES: usize = 10;
@@ -84,7 +98,7 @@ pub async fn voicekick_service(mut rx: UnboundedReceiver<VoiceKickCommand>) {
             match samples_rx.try_recv() {
                 Ok(new_samples) => {
                     if new_samples.is_empty() {
-                        voice_state.raw_samples.push(new_samples);
+                        voice_state.raw_samples.push(vec![]); // push empty vector to keep track of silence
                         continue;
                     }
 
@@ -101,7 +115,7 @@ pub async fn voicekick_service(mut rx: UnboundedReceiver<VoiceKickCommand>) {
                         voice_state.raw_samples.extend(recent_samples);
                     }
 
-                    match whisper.with_mel_segments(&new_samples) {
+                    match whisper_clone.lock().await.with_mel_segments(&new_samples) {
                         Ok(new_segments) => {
                             if !new_segments
                                 .first()
@@ -138,45 +152,20 @@ pub async fn voicekick_service(mut rx: UnboundedReceiver<VoiceKickCommand>) {
             VoiceKickCommand::Pause => {
                 voice_stream.pause().expect("TODO: fix");
             }
-            VoiceKickCommand::SetInputDevice(new_device) => {
-                if new_device == current_device {
-                    continue;
-                }
+            VoiceKickCommand::UpdateVoiceStream => {
                 voice_stream.pause().expect("TODO: fix"); // pause the current stream
 
-                current_device = new_device;
-                voice_stream =
-                    new_voice_stream(&current_device, samples_tx.clone(), silero_voice_threshold)
-                        .expect("TODO: fix");
+                voice_stream = new_voice_stream(
+                    &voice_state.selected_input_device.read(),
+                    samples_tx.clone(),
+                    voice_state.silero_voice_threshold.read().clone(),
+                )
+                .expect("TODO: fix");
             }
-            VoiceKickCommand::SetSileroVoiceThreshold(new_threshold) => {
-                if new_threshold == silero_voice_threshold {
-                    continue;
-                }
+            VoiceKickCommand::UpdateWhisper => {
                 voice_stream.pause().expect("TODO: fix"); // pause the current stream
 
-                silero_voice_threshold = new_threshold;
-                voice_stream =
-                    new_voice_stream(&current_device, samples_tx.clone(), silero_voice_threshold)
-                        .expect("TODO: fix");
-            }
-            VoiceKickCommand::SetWhisperModel(new_model) => {
-                if new_model == current_model {
-                    continue;
-                }
-                voice_stream.pause().expect("TODO: fix"); // pause the current stream
-
-                current_model = new_model;
-                whisper = new_whisper(current_model, &current_language);
-            }
-            VoiceKickCommand::SetWhisperLanguage(new_language) => {
-                if current_language == new_language {
-                    continue;
-                }
-                voice_stream.pause().expect("TODO: fix"); // pause the current stream
-
-                current_language = new_language;
-                whisper = new_whisper(current_model, &current_language);
+                *whisper.lock().await = new_whisper();
             }
         }
     }

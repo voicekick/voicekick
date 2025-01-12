@@ -351,7 +351,7 @@ impl WhisperBuilder {
 
         let space_token = vector_into_tokens(&self.tokenizer, &[" "], None)[0];
 
-        let whisper = Whisper {
+        Ok(Whisper {
             device: self.device,
             model: self.model,
             config: self.config,
@@ -377,8 +377,6 @@ impl WhisperBuilder {
             command_boost_value: self.command_boost_value,
             no_speech_threshold: self.no_speech_threshold,
             logprob_threshold: self.logprob_threshold,
-        };
-
-        Ok(whisper)
+        })
     }
 }
