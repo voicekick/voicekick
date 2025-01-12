@@ -685,7 +685,7 @@ impl SpeechRecognitionDecoder for Whisper {
                 continue;
             }
             let segment = Segment {
-                start: (seek * self.hop_lengnth) as f64 / audio_params::SAMPLE_RATE as f64,
+                timestamp: None,
                 duration: (segment_size * self.hop_lengnth) as f64
                     / audio_params::SAMPLE_RATE as f64,
                 dr,

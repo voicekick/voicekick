@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use crate::states::VoiceState;
 
 const WAVEFORM_CSS: Asset = asset!("/assets/waveform.css");
+const WHISPER_CSS: Asset = asset!("/assets/whisper.css");
 const VISUALIZATION_WIDTH: usize = 100;
 
 #[component]
@@ -56,8 +57,48 @@ pub fn WaveformComponent() -> Element {
         }
     });
 
+    let segments_rendered = voice_state
+        .segments
+        .iter()
+        .enumerate()
+        .map(|(i, segment)| {
+            let duration_ms = (segment.duration * 1000.0) as i64;
+
+            rsx! {
+                div {
+                    key: "{i}",
+                    class: "segment",
+                    p {
+                        class: "text",
+                        "{&segment.dr.text}"
+                    }
+                    div {
+                        class: "metadata",
+                        span {
+                            class: "duration segment-metric",
+                            "Duration: {duration_ms}ms"
+                        }
+                        span {
+                            class: "nospeech segment-metric",
+                            "No speech: {(1.0 - segment.dr.no_speech_prob):.2}"
+                        }
+                        span {
+                            class: "avglogprob segment-metric",
+                            "AVG log prob: {(1.0 - segment.dr.avg_logprob):.2}"
+                        }
+                        span {
+                            class: "temperature segment-metric",
+                            "Temperature: {segment.dr.temperature}"
+                        }
+                    }
+                }
+            }
+        })
+        .collect::<Vec<Element>>();
+
     rsx! {
         document::Link { rel: "stylesheet", href: WAVEFORM_CSS}
+        document::Link { rel: "stylesheet", href: WHISPER_CSS}
         div {
             class: "waveform-container",
 
@@ -70,6 +111,13 @@ pub fn WaveformComponent() -> Element {
 
                 // Draw bars for each sample
                 {samples_rendered}
+            }
+        }
+        div {
+            class: "whisper-container",
+            div {
+                class: "transcription-box",
+                {segments_rendered.into_iter().rev()}
             }
         }
     }

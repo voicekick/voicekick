@@ -11,8 +11,6 @@ dioxus = { version = "0.6.0" }
 # workspace
 ui = { path = "ui" }
 
-[profile]
-
 [profile.wasm-dev]
 inherits = "dev"
 opt-level = 1

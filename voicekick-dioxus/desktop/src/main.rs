@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use tracing::Level;
 
 mod components;
 mod services;
@@ -21,6 +22,7 @@ enum Route {
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 
 fn main() {
+    dioxus_logger::init(Level::INFO).expect("failed to init logger");
     dioxus::launch(App);
 }
 

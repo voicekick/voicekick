@@ -1090,8 +1090,11 @@ name = "desktop"
 version = "0.1.0"
 dependencies = [
  "dioxus",
+ "dioxus-logger",
  "futures-util",
+ "inference-candle",
  "tokio",
+ "tracing",
  "ui",
  "voice-stream",
  "voice-whisper",
@@ -2568,18 +2571,23 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hf-hub"
-version = "0.3.2"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b780635574b3d92f036890d8373433d6f9fc7abb320ee42a5c25897fc8ed732"
+checksum = "112fa2f6ad4ab815b9e1b938b4b1e437032d055e2f92ed10fd6ab2e62d02c6b6"
 dependencies = [
  "dirs",
+ "futures",
+ "http",
  "indicatif",
  "log",
  "native-tls",
+ "num_cpus",
  "rand 0.8.5",
+ "reqwest",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.10",
+ "tokio",
  "ureq",
 ]
 
@@ -3210,9 +3218,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.22"
+version = "0.4.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
+checksum = "3d6ea2a48c204030ee31a7d7fc72c93294c92fe87ecb1789881c9543516e1a0d"
 
 [[package]]
 name = "longest-increasing-subsequence"

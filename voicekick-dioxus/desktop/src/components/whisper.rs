@@ -2,23 +2,29 @@ use dioxus::prelude::*;
 
 use voice_whisper::{WhichModel, SUPPORTED_LANGUAGES};
 
-use crate::states::{VoiceState, WhisperConfigState};
+use crate::{
+    services::VoiceKickCommand,
+    states::{VoiceState, WhisperConfigState},
+};
 
 #[component]
 pub fn WhisperComponent() -> Element {
     let voice_state = use_context::<VoiceState>();
     let mut whisper_config_state = use_context::<WhisperConfigState>();
+    let voice_command_task = use_coroutine_handle::<VoiceKickCommand>();
 
     let handle_model_change = move |evt: Event<FormData>| {
-        whisper_config_state
-            .current_model
-            .set(evt.value().as_str().into());
+        let model = evt.value().as_str().into();
+        whisper_config_state.current_model.set(model);
+
+        voice_command_task.send(VoiceKickCommand::SetWhisperModel(model));
     };
 
     let handle_language_change = move |evt: Event<FormData>| {
-        whisper_config_state
-            .current_language
-            .set(evt.value().clone());
+        let language: String = evt.value().into();
+
+        voice_command_task.send(VoiceKickCommand::SetWhisperLanguage(language.clone()));
+        whisper_config_state.current_language.set(language.clone());
     };
 
     let models_rendered = WhichModel::iter().map(|model| {

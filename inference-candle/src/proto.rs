@@ -16,8 +16,8 @@ pub struct DecodingResult {
 /// Represents a segment of the input audio.
 #[derive(Debug, Clone)]
 pub struct Segment {
-    /// Start time of the segment in ms
-    pub start: f64,
+    /// Timestamp of the segment in ms
+    pub timestamp: Option<f64>,
     /// Duration of the segment in ms
     pub duration: f64,
     /// Decoding result

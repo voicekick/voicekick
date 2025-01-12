@@ -10,6 +10,9 @@ voice-stream = { path = "../../voice-stream" }
 voice-whisper = { path = "../../voice-whisper" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 futures-util = "0.3.31"
+dioxus-logger = "0.6.1"
+tracing = "0.1.41"
+inference-candle = { path = "../../inference-candle" }
 
 [features]
 default = ["desktop"]
