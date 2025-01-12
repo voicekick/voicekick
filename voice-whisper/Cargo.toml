@@ -22,7 +22,7 @@ candle-core = { version = "0.8", default-features = false }
 inference-candle = { path = "../inference-candle" }
 rand = "0.8"
 tokenizers = "0.21"
-hf-hub = "0.3"
+hf-hub = "0.4"
 serde_json = "1"
 byteorder = "1"
 mel_spec = "0.2"

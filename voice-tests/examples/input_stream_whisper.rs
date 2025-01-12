@@ -6,8 +6,6 @@ use voice_stream::cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use voice_stream::{VoiceInputError, VoiceStreamBuilder};
 use voice_whisper::WhichModel;
 
-use inference_candle::SpeechRecognitionDecoder;
-
 #[tokio::main]
 async fn main() -> Result<(), VoiceInputError> {
     tracing_subscriber::fmt()
