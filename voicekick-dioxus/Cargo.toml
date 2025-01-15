@@ -1,12 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-    "ui",
-    "desktop",
+  "ui",
+  "desktop",
+  "server",
 ]
 
 [workspace.dependencies]
-dioxus = { version = "0.6.0" }
+dioxus = { version = "0.6.0", default-features = false, features = ["html"] }
 
 # workspace
 ui = { path = "ui" }

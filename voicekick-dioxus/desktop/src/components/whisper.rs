@@ -4,20 +4,20 @@ use voice_whisper::{WhichModel, SUPPORTED_LANGUAGES};
 
 use crate::{
     services::VoiceKickCommand,
-    states::{VoiceState, WhisperConfigState},
+    states::{VoiceConfigState, VoiceState},
 };
 
 #[component]
 pub fn WhisperComponent() -> Element {
     let voice_state = use_context::<VoiceState>();
-    let mut whisper_config_state = use_context::<WhisperConfigState>();
+    let mut voice_config_state = use_context::<VoiceConfigState>();
     let voice_command_task = use_coroutine_handle::<VoiceKickCommand>();
 
     let handle_model_change = move |evt: Event<FormData>| {
         let model: WhichModel = evt.value().as_str().into();
 
-        if *whisper_config_state.current_model.read() != model {
-            whisper_config_state.current_model.set(model);
+        if *voice_config_state.current_model.read() != model {
+            voice_config_state.current_model.set(model);
             voice_command_task.send(VoiceKickCommand::UpdateWhisper);
         }
     };
@@ -25,16 +25,16 @@ pub fn WhisperComponent() -> Element {
     let handle_language_change = move |evt: Event<FormData>| {
         let language: String = evt.value().into();
 
-        if *whisper_config_state.current_language.read() != language {
-            whisper_config_state.current_language.set(language.clone());
+        if *voice_config_state.current_language.read() != language {
+            voice_config_state.current_language.set(language.clone());
             voice_command_task.send(VoiceKickCommand::UpdateWhisper);
         }
     };
 
     let handle_temperature_change = move |evt: Event<FormData>| {
         if let Ok(value) = evt.value().parse::<f64>() {
-            if *whisper_config_state.temperature.read() != value {
-                whisper_config_state.temperature.set(value);
+            if *voice_config_state.temperature.read() != value {
+                voice_config_state.temperature.set(value);
                 voice_command_task.send(VoiceKickCommand::UpdateWhisper);
             }
         }
@@ -42,8 +42,8 @@ pub fn WhisperComponent() -> Element {
 
     let handle_repetition_penalty_change = move |evt: Event<FormData>| {
         if let Ok(value) = evt.value().parse::<f32>() {
-            if *whisper_config_state.repetition_penalty.read() != value {
-                whisper_config_state.repetition_penalty.set(value);
+            if *voice_config_state.repetition_penalty.read() != value {
+                voice_config_state.repetition_penalty.set(value);
                 voice_command_task.send(VoiceKickCommand::UpdateWhisper);
             }
         }
@@ -51,8 +51,8 @@ pub fn WhisperComponent() -> Element {
 
     let handle_repetition_frequency_change = move |evt: Event<FormData>| {
         if let Ok(value) = evt.value().parse::<usize>() {
-            if *whisper_config_state.repetition_frequency.read() != value {
-                whisper_config_state.repetition_frequency.set(value);
+            if *voice_config_state.repetition_frequency.read() != value {
+                voice_config_state.repetition_frequency.set(value);
                 voice_command_task.send(VoiceKickCommand::UpdateWhisper);
             }
         }
@@ -60,8 +60,8 @@ pub fn WhisperComponent() -> Element {
 
     let handle_boost_value_change = move |evt: Event<FormData>| {
         if let Ok(value) = evt.value().parse::<f32>() {
-            if *whisper_config_state.boost_value.read() != value {
-                whisper_config_state.boost_value.set(value);
+            if *voice_config_state.boost_value.read() != value {
+                voice_config_state.boost_value.set(value);
                 voice_command_task.send(VoiceKickCommand::UpdateWhisper);
             }
         }
@@ -69,8 +69,8 @@ pub fn WhisperComponent() -> Element {
 
     let handle_command_boost_value_change = move |evt: Event<FormData>| {
         if let Ok(value) = evt.value().parse::<f32>() {
-            if *whisper_config_state.command_boost_value.read() != value {
-                whisper_config_state.command_boost_value.set(value);
+            if *voice_config_state.command_boost_value.read() != value {
+                voice_config_state.command_boost_value.set(value);
                 voice_command_task.send(VoiceKickCommand::UpdateWhisper);
             }
         }
@@ -78,8 +78,8 @@ pub fn WhisperComponent() -> Element {
 
     let handle_no_speech_threshold_change = move |evt: Event<FormData>| {
         if let Ok(value) = evt.value().parse::<f64>() {
-            if *whisper_config_state.no_speech_threshold.read() != value {
-                whisper_config_state.no_speech_threshold.set(value);
+            if *voice_config_state.no_speech_threshold.read() != value {
+                voice_config_state.no_speech_threshold.set(value);
                 voice_command_task.send(VoiceKickCommand::UpdateWhisper);
             }
         }
@@ -87,8 +87,8 @@ pub fn WhisperComponent() -> Element {
 
     let handle_logprob_threshold_change = move |evt: Event<FormData>| {
         if let Ok(value) = evt.value().parse::<f64>() {
-            if *whisper_config_state.logprob_threshold.read() != value {
-                whisper_config_state.logprob_threshold.set(value);
+            if *voice_config_state.logprob_threshold.read() != value {
+                voice_config_state.logprob_threshold.set(value);
                 voice_command_task.send(VoiceKickCommand::UpdateWhisper);
             }
         }
@@ -123,7 +123,7 @@ pub fn WhisperComponent() -> Element {
             select {
                 disabled: is_disabled,
                 id: "model-select",
-                value: "{whisper_config_state.current_model.read()}",
+                value: "{voice_config_state.current_model.read()}",
                 onchange: handle_model_change,
                 {models_rendered}
             }
@@ -136,9 +136,9 @@ pub fn WhisperComponent() -> Element {
                 "Whisper language "
             }
             select {
-                disabled: !whisper_config_state.current_model.read().is_multilingual() || is_disabled,
+                disabled: !voice_config_state.current_model.read().is_multilingual() || is_disabled,
                 id: "language-select",
-                value: "{whisper_config_state.current_language.read()}",
+                value: "{voice_config_state.current_language.read()}",
                 onchange: handle_language_change,
                 {languages_rendered}
             }
@@ -147,7 +147,7 @@ pub fn WhisperComponent() -> Element {
         div {
             label {
                 r#for: "temperature",
-                "Temperature ({whisper_config_state.temperature.read()})"
+                "Temperature ({voice_config_state.temperature.read()})"
             }
             input {
                 disabled: is_disabled,
@@ -156,7 +156,7 @@ pub fn WhisperComponent() -> Element {
                 min: "0.0",
                 max: "1.0",
                 step: "0.1",
-                value: "{whisper_config_state.temperature.read()}",
+                value: "{voice_config_state.temperature.read()}",
                 onchange: handle_temperature_change,
             }
         }
@@ -164,7 +164,7 @@ pub fn WhisperComponent() -> Element {
         div {
             label {
                 r#for: "repetition_penalty",
-                "Repetition Penalty ({whisper_config_state.repetition_penalty.read()})"
+                "Repetition Penalty ({voice_config_state.repetition_penalty.read()})"
             }
             input {
                 disabled: is_disabled,
@@ -173,7 +173,7 @@ pub fn WhisperComponent() -> Element {
                 min: "0.0",
                 max: "2.0",
                 step: "0.1",
-                value: "{whisper_config_state.repetition_penalty.read()}",
+                value: "{voice_config_state.repetition_penalty.read()}",
                 onchange: handle_repetition_penalty_change,
             }
         }
@@ -181,7 +181,7 @@ pub fn WhisperComponent() -> Element {
         div {
             label {
                 r#for: "repetition_frequency",
-                "Repetition Frequency ({whisper_config_state.repetition_frequency.read()})"
+                "Repetition Frequency ({voice_config_state.repetition_frequency.read()})"
             }
             input {
                 disabled: is_disabled,
@@ -189,7 +189,7 @@ pub fn WhisperComponent() -> Element {
                 id: "repetition_frequency",
                 min: "0",
                 max: "100",
-                value: "{whisper_config_state.repetition_frequency.read()}",
+                value: "{voice_config_state.repetition_frequency.read()}",
                 onchange: handle_repetition_frequency_change,
             }
         }
@@ -197,7 +197,7 @@ pub fn WhisperComponent() -> Element {
         div {
             label {
                 r#for: "boost_value",
-                "Boost Value ({whisper_config_state.boost_value.read()})"
+                "Boost Value ({voice_config_state.boost_value.read()})"
             }
             input {
                 disabled: is_disabled,
@@ -206,7 +206,7 @@ pub fn WhisperComponent() -> Element {
                 min: "0.0",
                 max: "5.0",
                 step: "0.1",
-                value: "{whisper_config_state.boost_value.read()}",
+                value: "{voice_config_state.boost_value.read()}",
                 onchange: handle_boost_value_change,
             }
         }
@@ -214,7 +214,7 @@ pub fn WhisperComponent() -> Element {
         div {
             label {
                 r#for: "command_boost_value",
-                "Command Boost Value ({whisper_config_state.command_boost_value.read()})"
+                "Command Boost Value ({voice_config_state.command_boost_value.read()})"
             }
             input {
                 disabled: is_disabled,
@@ -223,7 +223,7 @@ pub fn WhisperComponent() -> Element {
                 min: "0.0",
                 max: "5.0",
                 step: "0.1",
-                value: "{whisper_config_state.command_boost_value.read()}",
+                value: "{voice_config_state.command_boost_value.read()}",
                 onchange: handle_command_boost_value_change,
             }
         }
@@ -231,7 +231,7 @@ pub fn WhisperComponent() -> Element {
         div {
             label {
                 r#for: "no_speech_threshold",
-                "No Speech Threshold ({whisper_config_state.no_speech_threshold.read()})"
+                "No Speech Threshold ({voice_config_state.no_speech_threshold.read()})"
             }
             input {
                 disabled: is_disabled,
@@ -240,7 +240,7 @@ pub fn WhisperComponent() -> Element {
                 min: "0.0",
                 max: "1.0",
                 step: "0.01",
-                value: "{whisper_config_state.no_speech_threshold.read()}",
+                value: "{voice_config_state.no_speech_threshold.read()}",
                 onchange: handle_no_speech_threshold_change,
             }
         }
@@ -248,7 +248,7 @@ pub fn WhisperComponent() -> Element {
         div {
             label {
                 r#for: "logprob_threshold",
-                "Logprob Threshold ({whisper_config_state.logprob_threshold.read()})"
+                "Logprob Threshold ({voice_config_state.logprob_threshold.read()})"
             }
             input {
                 disabled: is_disabled,
@@ -257,7 +257,7 @@ pub fn WhisperComponent() -> Element {
                 min: "-5.0",
                 max: "0.0",
                 step: "0.1",
-                value: "{whisper_config_state.logprob_threshold.read()}",
+                value: "{voice_config_state.logprob_threshold.read()}",
                 onchange: handle_logprob_threshold_change,
             }
         }

@@ -6,7 +6,7 @@ mod services;
 mod states;
 mod views;
 
-use states::{VoiceState, WhisperConfigState};
+use states::{VoiceConfigState, VoiceState};
 use ui::Navbar;
 use views::{Home, Whisper};
 
@@ -23,15 +23,19 @@ const MAIN_CSS: Asset = asset!("/assets/main.css");
 
 fn main() {
     dioxus_logger::init(Level::INFO).expect("failed to init logger");
+
     dioxus::launch(App);
 }
 
 #[component]
 fn App() -> Element {
+    tokio::spawn(server::serve());
+
     // Build cool things ✌️
     use_coroutine(services::voicekick_service);
+    use_coroutine(services::segments_service);
     use_context_provider(|| VoiceState::default());
-    use_context_provider(|| WhisperConfigState::default());
+    use_context_provider(|| VoiceConfigState::default());
 
     rsx! {
         // Global app resources

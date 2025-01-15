@@ -4,16 +4,21 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-dioxus = { workspace = true, features = ["router"] }
+dioxus = { workspace = true, features = ["router", "dioxus-cli-config", "asset", "macro", "signals", "hooks", "fullstack", "launch"] }
 ui = { workspace = true }
 voice-stream = { path = "../../voice-stream" }
 voice-whisper = { path = "../../voice-whisper" }
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 futures-util = "0.3.31"
 dioxus-logger = "0.6.1"
-tracing = "0.1.41"
+tracing = "0.1"
 inference-candle = { path = "../../inference-candle" }
+server = { path = "../server" }
 
 [features]
 default = ["desktop"]
 desktop = ["dioxus/desktop"]
+
+[dependencies.tokio]
+version = "1"
+default-features = false
+features = ["rt-multi-thread", "macros"]

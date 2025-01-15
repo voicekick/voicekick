@@ -1,0 +1,13 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.8", default-features = false, features = ["tokio", "json", "http1", "http2", "tracing"] }
+tracing = "0.1"
+
+[dependencies.tokio]
+version = "1"
+default-features = false
+features = ["rt-multi-thread", "macros"]
