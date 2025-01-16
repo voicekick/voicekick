@@ -13,7 +13,8 @@ pub struct Namespace {
 
 pub struct Command {
     pub name: String,
-    pub action: fn(&str),
+    pub command_parts_count: usize,
+    pub action: fn(Option<&str>),
 }
 
 #[derive(Debug)]
@@ -50,10 +51,11 @@ impl CommandParserBuilder {
         mut self,
         namespace: &str,
         command_name: &str,
-        action: fn(&str),
+        action: fn(Option<&str>),
     ) -> Result<Self, CommandParserError> {
         if let Some(ns) = self.namespaces.iter_mut().find(|ns| ns.name == namespace) {
             ns.commands.push(Command {
+                command_parts_count: command_name.split_whitespace().count(),
                 name: command_name.to_string(),
                 action,
             });
@@ -71,38 +73,54 @@ impl CommandParserBuilder {
     }
 }
 
-type CommandAction<'s> = (&'s fn(&str), String);
+type CommandAction<'s> = (&'s fn(Option<&str>), Option<String>);
 
 impl CommandParser {
     /// Parses a command input with a namespace prefix and executes the closest matching command
     pub fn parse(&self, input: &str) -> Result<CommandAction, CommandParserError> {
         // Split input into namespace and rest of the command
-        let parts: Vec<&str> = input.splitn(2, ' ').collect();
+        let parts: Vec<&str> = input.split_whitespace().collect();
         if parts.len() < 2 {
             return Err(CommandParserError::InvalidFormat);
         }
         let namespace_name = parts[0];
-        let command_text = parts[1];
 
         // Find the namespace
         if let Some(ns) = self.namespaces.iter().find(|ns| ns.name == namespace_name) {
             // Find the closest matching command
-            if let Some(command) = ns
+            if let Some((command, distance, command_text)) = ns
                 .commands
                 .iter()
-                .min_by_key(|cmd| levenshtein(&cmd.name, command_text))
-            {
-                let distance = levenshtein(&command.name, command_text);
+                .map(|command| {
+                    // Defined commands will have multiple expected tokens to match hence
+                    // check for the first n tokens of a given command
+                    let command_text = parts
+                        .get(1..command.command_parts_count + 1)
+                        .map(|p| p.join(" "))
+                        .unwrap_or(String::new());
 
+                    (
+                        command,
+                        levenshtein(&command.name, &command_text),
+                        command_text,
+                    )
+                })
+                .min_by_key(|cmd| cmd.1)
+            {
                 if distance <= ns.threshold {
-                    return Ok((&command.action, command_text.to_string()));
+                    let args = parts
+                        .get(command.command_parts_count..)
+                        .map(|s| s.join(" "));
+
+                    Ok((&command.action, args))
                 } else {
-                    return Err(CommandParserError::NoCloseMatches(command_text.to_string()));
+                    Err(CommandParserError::NoCloseMatches(command_text.to_string()))
                 }
+            } else {
+                Err(CommandParserError::CommandNotFound(
+                    parts.join(" ").to_string(),
+                ))
             }
-            Err(CommandParserError::CommandNotFound(
-                command_text.to_string(),
-            ))
         } else {
             Err(CommandParserError::NamespaceNotFound(
                 namespace_name.to_string(),
@@ -115,7 +133,7 @@ impl CommandParser {
 mod tests {
     use super::*;
 
-    fn dummy_action(_params: &str) {
+    fn dummy_action(_params: Option<&str>) {
         // Dummy action for testing
     }
 
@@ -163,7 +181,7 @@ mod tests {
             .unwrap()
             .build();
 
-        let result = parser.parse("test dummy command");
+        let result = parser.parse("test dummy          command");
 
         assert!(result.is_ok());
     }
@@ -202,7 +220,7 @@ mod tests {
 
         assert!(result.is_err());
         if let Err(CommandParserError::CommandNotFound(cmd)) = result {
-            assert_eq!(cmd, "unknown_command");
+            assert_eq!(cmd, "test unknown_command");
         } else {
             panic!("Expected CommandNotFound error");
         }

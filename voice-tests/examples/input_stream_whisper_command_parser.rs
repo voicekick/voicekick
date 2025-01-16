@@ -49,7 +49,7 @@ async fn main() -> Result<(), VoiceInputError> {
     tokio::spawn(async move {
         let parser = CommandParserBuilder::new()
             .register_namespace("test", Some(1)) // Toleration for one character difference
-            .register_command("test", "backwards command", |input: &str| {
+            .register_command("test", "backwards command", |input: Option<&str>| {
                 println!("Command: {:?}", input);
             })
             .unwrap()
@@ -73,7 +73,7 @@ async fn main() -> Result<(), VoiceInputError> {
 
                                 match parser.parse(text) {
                                     Ok((func, arg)) => {
-                                        func(&arg);
+                                        func(arg.as_deref());
 
                                         //
                                     }

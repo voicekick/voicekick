@@ -42,16 +42,16 @@ async fn test_command_parser() {
 
     let parser = CommandParserBuilder::new()
         .register_namespace("americans", Some(1)) // Toleration for one character difference
-        .register_command("americans", "ask now", |input: &str| {
+        .register_command("americans", "ask now", |input: Option<&str>| {
             println!("Command: {:?}", input);
-            assert!(input == "ask not");
+            assert!(input == Some("ask not"));
         })
         .unwrap()
         .build();
 
     match parser.parse(got[0].dr.text.as_str()) {
         Ok((func, arg)) => {
-            func(&arg);
+            func(arg.as_deref());
 
             //
         }
