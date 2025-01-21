@@ -1,4 +1,4 @@
-use command_parser::CommandParserBuilder;
+use command_parser::{CommandAction, CommandArgs, CommandParserBuilder, CommandResult};
 use tokio::io::{self, AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
 use tracing_subscriber::filter::LevelFilter;
@@ -6,6 +6,27 @@ use tracing_subscriber::EnvFilter;
 use voice_stream::cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use voice_stream::{VoiceInputError, VoiceStreamBuilder};
 use voice_whisper::WhichModel;
+
+struct DummyCommand;
+
+impl CommandAction for DummyCommand {
+    fn execute(&self, args: CommandArgs) -> CommandResult {
+        match args {
+            CommandArgs::None => {
+                println!("No arguments");
+            }
+            CommandArgs::Some(input) => {
+                println!("Input: {:?}", input);
+            }
+            _ => {}
+        }
+        CommandResult::Ok(None)
+    }
+}
+
+fn dummy_action() -> Box<DummyCommand> {
+    Box::new(DummyCommand {})
+}
 
 #[tokio::main]
 async fn main() -> Result<(), VoiceInputError> {
@@ -49,9 +70,7 @@ async fn main() -> Result<(), VoiceInputError> {
     tokio::spawn(async move {
         let parser = CommandParserBuilder::new()
             .register_namespace("test", Some(1)) // Toleration for one character difference
-            .register_command("test", "backwards command", |input: Option<&str>| {
-                println!("Command: {:?}", input);
-            })
+            .register_command("test", "backwards command", dummy_action())
             .unwrap()
             .build();
 
@@ -72,8 +91,8 @@ async fn main() -> Result<(), VoiceInputError> {
                                 }
 
                                 match parser.parse(text) {
-                                    Ok((func, arg)) => {
-                                        func(arg.as_deref());
+                                    Ok((cmd, arg)) => {
+                                        cmd.execute(arg);
 
                                         //
                                     }

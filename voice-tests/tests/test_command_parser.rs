@@ -1,6 +1,27 @@
-use command_parser::CommandParserBuilder;
+use command_parser::{CommandAction, CommandArgs, CommandParserBuilder, CommandResult};
 use voice_tests::{preprocess_samples, read_voice_dataset_wav_into_samples};
 use voice_whisper::WhichModel;
+
+struct DummyCommand;
+
+impl CommandAction for DummyCommand {
+    fn execute(&self, args: CommandArgs) -> CommandResult {
+        match args {
+            CommandArgs::None => {
+                println!("No arguments");
+            }
+            CommandArgs::Some(input) => {
+                assert_eq!(input, "not");
+            }
+            _ => {}
+        }
+        CommandResult::Ok(None)
+    }
+}
+
+fn dummy_action() -> Box<DummyCommand> {
+    Box::new(DummyCommand {})
+}
 
 #[tokio::test]
 async fn test_command_parser() {
@@ -42,18 +63,13 @@ async fn test_command_parser() {
 
     let parser = CommandParserBuilder::new()
         .register_namespace("americans", Some(1)) // Toleration for one character difference
-        .register_command("americans", "ask now", |input: Option<&str>| {
-            println!("Command: {:?}", input);
-            assert!(input == Some("not"));
-        })
+        .register_command("americans", "ask now", dummy_action())
         .unwrap()
         .build();
 
     match parser.parse(got[0].dr.text.as_str()) {
-        Ok((func, arg)) => {
-            func(arg.as_deref());
-
-            //
+        Ok((cmd, arg)) => {
+            cmd.execute(arg);
         }
         Err(e) => {
             print!("parser error {:?}", e);
