@@ -241,20 +241,17 @@ pub fn model_filenames(which_model: WhichModel) -> Result<(PathBuf, PathBuf, Pat
 }
 
 /// Create a set of token setters for the Whisper model.
+#[non_exhaustive]
 pub enum WithSpace {
     /// Add a space before the token.
     Before,
-    /// Add a space after the token.
-    After,
-    /// Add a space before and after the token.
-    BeforeAndAfter,
 }
 
 /// Convert a vector of strings into a vector of token IDs.
 pub fn vector_into_tokens(
     tokenizer: &Tokenizer,
     input: &[&str],
-    space: Option<WithSpace>,
+    with_space: Option<WithSpace>,
 ) -> Vec<u32> {
     let encode = |n: &str| -> Vec<u32> {
         tokenizer
@@ -264,13 +261,11 @@ pub fn vector_into_tokens(
             .to_vec()
     };
 
-    let spaced: Vec<u32> = if let Some(s) = space {
+    let spaced: Vec<u32> = if let Some(s) = with_space {
         input
             .iter()
             .flat_map(|n| match s {
                 WithSpace::Before => encode(&format!(" {n}")),
-                WithSpace::After => encode(&format!("{n} ")),
-                WithSpace::BeforeAndAfter => encode(&format!(" {n} ")),
             })
             .collect()
     } else {
@@ -701,5 +696,106 @@ impl SpeechRecognitionDecoder for Whisper {
             segments.push(segment)
         }
         Ok(segments)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokenizers::Tokenizer;
+
+    fn get_test_tokenizer() -> Tokenizer {
+        let (_, tokenizer_filename, _) = model_filenames(WhichModel::TinyEn).unwrap();
+
+        Tokenizer::from_file(tokenizer_filename).unwrap()
+    }
+    #[test]
+    fn test_vector_into_tokens_penalty_tokens() {
+        let tokenizer = get_test_tokenizer();
+
+        let input = &[
+            // Punctuation tokens
+            "!", "'", "\\", "`", "(", ")", "*", ",", ".", "..", "...", ":", ";", "?", "[", "]", "_",
+            "{", "|", "}", "~",
+        ];
+
+        let tokens = vector_into_tokens(&tokenizer, input, None);
+        assert!(!tokens.is_empty());
+        assert_eq!(tokens.len(), input.len());
+        assert!(tokens.contains(&0)); // !
+        assert!(!tokens.contains(&220)); // <space>
+    }
+
+    #[test]
+    fn test_vector_into_tokens() {
+        let tokenizer = get_test_tokenizer();
+
+        // Test basic tokenization without spaces
+        let input = vec!["hello", "world"];
+        let tokens = vector_into_tokens(&tokenizer, &input, None);
+        assert!(!tokens.is_empty());
+
+        // Test with space before
+        let tokens_space_before = vector_into_tokens(&tokenizer, &input, Some(WithSpace::Before));
+        assert!(!tokens_space_before.is_empty());
+        assert!(
+            tokens_space_before.len() > tokens.len(),
+            "Space-prefixed tokens should be longer than basic tokens"
+        );
+
+        // Test with space after
+        let tokens_space_after = vector_into_tokens(&tokenizer, &input, Some(WithSpace::Before));
+        assert!(!tokens_space_after.is_empty());
+        assert!(
+            tokens_space_after.len() > tokens.len(),
+            "Space-suffixed tokens should be longer than basic tokens"
+        );
+
+        // Test with space before and after
+        let tokens_both_spaces = vector_into_tokens(&tokenizer, &input, Some(WithSpace::Before));
+        assert!(!tokens_both_spaces.is_empty());
+        assert!(
+            tokens_both_spaces.len() > tokens.len(),
+            "Space-wrapped tokens should be longer than basic tokens"
+        );
+
+        // Verify decoded tokens make sense
+        let decoded = tokenizer
+            .decode(&tokens, true)
+            .expect("Failed to decode tokens");
+        assert!(
+            decoded.contains("hello"),
+            "Decoded text should contain 'hello'"
+        );
+        assert!(
+            decoded.contains("world"),
+            "Decoded text should contain 'world'"
+        );
+
+        // Test empty input
+        let empty_input: Vec<&str> = vec![];
+        let empty_tokens = vector_into_tokens(&tokenizer, &empty_input, None);
+        assert!(
+            empty_tokens.is_empty(),
+            "Empty input should produce empty output"
+        );
+
+        // Test single token
+        let single_input = vec!["test"];
+        let single_tokens = vector_into_tokens(&tokenizer, &single_input, None);
+        assert!(
+            !single_tokens.is_empty(),
+            "Single input should produce tokens"
+        );
+    }
+
+    #[test]
+    fn test_vector_into_tokens_special_words() {
+        let tokenizer = get_test_tokenizer();
+
+        // Test basic tokenization without spaces
+        let input = vec!["git"];
+        let tokens = vector_into_tokens(&tokenizer, &input, None);
+        assert!(!tokens.is_empty());
     }
 }

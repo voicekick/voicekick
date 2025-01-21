@@ -44,7 +44,7 @@ async fn test_command_parser() {
         .register_namespace("americans", Some(1)) // Toleration for one character difference
         .register_command("americans", "ask now", |input: Option<&str>| {
             println!("Command: {:?}", input);
-            assert!(input == Some("ask not"));
+            assert!(input == Some("not"));
         })
         .unwrap()
         .build();

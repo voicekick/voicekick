@@ -92,3 +92,31 @@ cargo test test_triage_voice_commands_whisper_english_models
         },
     ),
 )
+
+2025-01-22
+(
+    (
+        TinyEn,
+        {
+            "0": 82,
+        },
+    ),
+    (
+        BaseEn,
+        {
+            "0": 82,
+        },
+    ),
+    (
+        SmallEn,
+        {
+            "0": 77,
+        },
+    ),
+    (
+        MediumEn,
+        {
+            "0": 87,
+        },
+    ),
+)

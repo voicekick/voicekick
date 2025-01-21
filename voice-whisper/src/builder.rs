@@ -84,7 +84,7 @@ impl WhisperBuilder {
                 "eleven", "twelve", "thirteen", "fourteen", "fifteen",
                 "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
             ],
-            Some(WithSpace::BeforeAndAfter)
+            Some(WithSpace::Before)
         );
 
         #[rustfmt::skip]
@@ -104,13 +104,10 @@ impl WhisperBuilder {
             &tokenizer,
             &[
                 // Punctuation tokens
-                "!", "'", "\\", "`", "(", ")", "*", ",", ".", "..", "...",
+                "!", "'", "\\", "/", "`", "(", ")", "*", ",", ".", "..", "...",
                 ":", ";", "?", "[", "]", "_", "{", "|", "}", "~",
-
-                // Punctuation tokens with space at the end
-                ". ", ", ", "! ", "? ", "... ", "; ", ": ",
             ],
-            Some(WithSpace::After)
+            Some(WithSpace::Before)
         );
 
         let number_tokens = vector_into_tokens(
