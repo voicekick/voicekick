@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::components::{VoiceComponent, WaveformComponent};
+use crate::components::{SegmentsLogComponent, VoiceComponent, WaveformComponent};
 
 #[component]
 pub fn Home() -> Element {
@@ -8,5 +8,8 @@ pub fn Home() -> Element {
         VoiceComponent {}
 
         WaveformComponent {}
+
+        SegmentsLogComponent {}
+
     }
 }

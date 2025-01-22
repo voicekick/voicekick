@@ -18,10 +18,11 @@
 .segment {
   margin-bottom: 12px;
   padding: 12px;
-  border-left: 3px solid #2196F3;
+  border-left: 3px solid #a96ad9;
   background: white;
   border-radius: 0 4px 4px 0;
   transition: background-color 0.2s ease;
+  display: flex;
 }
 
 .segment:hover {
@@ -32,37 +33,61 @@
   margin-bottom: 0;
 }
 
+.voicepart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 50%;
+}
+
 .text {
   margin: 0 0 8px 0;
-  font-size: 16px;
+  font-size: 14px;
   color: #333;
   line-height: 1.4;
 }
 
 .metadata {
   display: flex;
-  gap: 16px;
-  font-size: 12px;
+  gap: 8px;
+  font-size: 10px;
   color: #666;
 }
 
 .segment-metric {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
-.nospeech::before {
+.segment-metric::before {
   content: '•';
-  color: #999;
+  color: #996;
 }
 
-.avglogprob::before {
-  content: '•';
-  color: #999;
+.commandpart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 50%;
 }
 
-.temperature::before {
-  content: '•';
-  color: #999;
+.command {
+  display: flex;
+  gap: 8px;
+  font-size: 10px;
+  color: #666;
 }
+
+.command-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.command-metric::before {
+  content: '•';
+  color: #996;
+}
+
+.success {}

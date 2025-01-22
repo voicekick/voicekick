@@ -13,6 +13,7 @@ dioxus-logger = "0.6.1"
 tracing = "0.1"
 inference-candle = { path = "../../inference-candle" }
 server = { path = "../server" }
+command-parser = { path = "../../command-parser" }
 
 [features]
 default = ["desktop"]

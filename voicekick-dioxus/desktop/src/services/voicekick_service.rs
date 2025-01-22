@@ -1,9 +1,9 @@
 use dioxus::{
-    hooks::{use_context, use_coroutine_handle, UnboundedReceiver},
+    hooks::{use_context, use_coroutine_handle, Coroutine, UnboundedReceiver},
     signals::{Readable, ReadableVecExt, WritableVecExt},
 };
 use futures_util::StreamExt;
-use inference_candle::proto::Segment;
+use inference_candle::proto::{DecodingResult, Segment};
 use tokio::sync::mpsc::{self};
 use tracing::error;
 
@@ -49,7 +49,38 @@ pub enum VoiceKickCommand {
 }
 
 const MAX_RAW_SAMPLES: usize = 10;
-const MAX_SEGMENTS: usize = 30;
+
+#[cfg(debug_assertions)]
+fn segments_seed(courinte: &Coroutine<Segment>) {
+    let segmets = vec![
+        Segment {
+            timestamp: None,
+            duration: 0.244,
+            dr: DecodingResult {
+                tokens: vec![],
+                text: "tester me now".to_string(),
+                avg_logprob: 0.23,
+                no_speech_prob: 0.4,
+                temperature: 0.1,
+            },
+        },
+        Segment {
+            timestamp: None,
+            duration: 0.444,
+            dr: DecodingResult {
+                tokens: vec![],
+                text: "test me now".to_string(),
+                avg_logprob: 0.1,
+                no_speech_prob: 0.4,
+                temperature: 0.0,
+            },
+        },
+    ];
+
+    for segment in segmets {
+        courinte.send(segment);
+    }
+}
 
 pub async fn voicekick_service(mut rx: UnboundedReceiver<VoiceKickCommand>) {
     let (samples_tx, mut samples_rx) = mpsc::unbounded_channel::<Vec<f32>>();
@@ -87,6 +118,9 @@ pub async fn voicekick_service(mut rx: UnboundedReceiver<VoiceKickCommand>) {
     };
 
     let mut whisper = new_whisper();
+
+    #[cfg(debug_assertions)]
+    segments_seed(&segment_task);
 
     loop {
         tokio::select! {
@@ -142,19 +176,8 @@ pub async fn voicekick_service(mut rx: UnboundedReceiver<VoiceKickCommand>) {
                                         .map(|segment| segment.dr.text.is_empty())
                                         .unwrap_or(false)
                                     {
-                                        for segment in &new_segments {
-                                            segment_task.send(segment.clone());
-                                        }
-
-                                        voice_state.segments.extend(new_segments);
-
-                                        // Optionally limit number of stored segments
-                                        if voice_state.segments.len() > MAX_SEGMENTS {
-                                            let segments = voice_state
-                                                .segments
-                                                .split_off(voice_state.segments.len() - MAX_SEGMENTS);
-                                            voice_state.segments.clear();
-                                            voice_state.segments.extend(segments);
+                                        for segment in new_segments {
+                                            segment_task.send(segment);
                                         }
                                     }
                                 }

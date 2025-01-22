@@ -1,39 +1,48 @@
+use core::fmt;
+
 use dioxus::signals::Signal;
-use tokio::sync::broadcast;
 
 use inference_candle::proto::Segment;
 use voice_stream::{default_input_device, voice::SILERO_VAD_VOICE_THRESHOLD};
 use voice_whisper::{WhichModel, SUPPORTED_LANGUAGES};
 
-#[derive(Debug)]
-pub struct VoiceSegmentState {
-    pub segment_tx: broadcast::Sender<Segment>,
-    pub segment_rx: broadcast::Receiver<Segment>,
+#[derive(Clone, Debug)]
+pub enum VoiceCommandStatus {
+    Success,
+    Loading,
+    Failed,
+    NoMatches,
 }
 
-impl Default for VoiceSegmentState {
+impl fmt::Display for VoiceCommandStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Success => write!(f, "success"),
+            Self::Loading => write!(f, "loading"),
+            Self::Failed => write!(f, "failed"),
+            Self::NoMatches => write!(f, "no matches"),
+        }
+    }
+}
+
+impl Default for VoiceCommandStatus {
     fn default() -> Self {
-        let (segment_tx, segment_rx) = broadcast::channel(1000);
-        Self {
-            segment_tx,
-            segment_rx,
-        }
+        Self::Loading
     }
 }
 
-impl Clone for VoiceSegmentState {
-    fn clone(&self) -> Self {
-        Self {
-            segment_tx: self.segment_tx.clone(),
-            segment_rx: self.segment_tx.subscribe(),
-        }
-    }
+#[derive(Clone, Debug)]
+pub struct VoiceCommandSegment {
+    pub segment: Segment,
+    pub status: Signal<VoiceCommandStatus>,
+    pub command_text: Signal<String>,
+    pub execution_time: Signal<f64>,
 }
 
 #[derive(Clone, Debug)]
 pub struct VoiceState {
     pub raw_samples: Signal<Vec<Vec<f32>>>,
-    pub segments: Signal<Vec<Segment>>,
+    pub segments: Signal<Vec<VoiceCommandSegment>>,
     pub is_recording: Signal<bool>,
 }
 
@@ -68,7 +77,6 @@ impl Default for VoiceConfigState {
         Self {
             selected_input_device: Signal::new(default_input_device().unwrap_or("".to_string())),
             silero_voice_threshold: Signal::new(SILERO_VAD_VOICE_THRESHOLD),
-
             current_model: Signal::new(WhichModel::default()),
             current_language: Signal::new(SUPPORTED_LANGUAGES[0].0.to_string()),
             temperature: Signal::new(0.0),

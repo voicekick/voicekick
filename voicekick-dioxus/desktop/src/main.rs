@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use tracing::Level;
 
+mod commands;
 mod components;
 mod services;
 mod states;
@@ -19,7 +20,7 @@ enum Route {
     Whisper {},
 }
 
-const MAIN_CSS: Asset = asset!("/assets/main.css");
+const CSS: Asset = asset!("/assets/main.css");
 
 fn main() {
     dioxus_logger::init(Level::INFO).expect("failed to init logger");
@@ -36,10 +37,11 @@ fn App() -> Element {
     use_coroutine(services::segments_service);
     use_context_provider(|| VoiceState::default());
     use_context_provider(|| VoiceConfigState::default());
+    use_context_provider(|| commands::all());
 
     rsx! {
         // Global app resources
-        document::Link { rel: "stylesheet", href: MAIN_CSS }
+        document::Link { rel: "stylesheet", href: CSS }
 
         Router::<Route> {}
     }
