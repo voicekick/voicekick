@@ -149,7 +149,7 @@ impl CommandParser {
             {
                 if command.distance <= ns.threshold {
                     let args = parts
-                        .get(command.command.command_parts_count..)
+                        .get(command.command.command_parts_count + 1..)
                         .map(|s| CommandArgs::Some(s.join(" ")))
                         .unwrap_or_default();
 
