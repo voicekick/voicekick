@@ -1,6 +1,9 @@
 #navbar {
   display: flex;
   flex-direction: row;
+  border-bottom: 3px solid #a96ad9;
+  padding: 10px;
+  margin-bottom: 10px;
 }
 
 #navbar a {
