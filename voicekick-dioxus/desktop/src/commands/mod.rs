@@ -1,3 +1,6 @@
+use std::fs::OpenOptions;
+use std::io::prelude::*;
+
 use command_parser::{
     CommandAction, CommandArgs, CommandParser, CommandParserBuilder, CommandResult,
 };
@@ -7,6 +10,28 @@ struct DummyCommand;
 impl CommandAction for DummyCommand {
     fn execute(&self, args: CommandArgs) -> CommandResult {
         println!("Command: {:?}", args);
+
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .append(true)
+            .open("dummy_command_file.tmp")
+            .unwrap();
+
+        match args {
+            CommandArgs::Some(a) => {
+                if let Err(e) = writeln!(file, "{}", a) {
+                    eprintln!("Couldn't write to file: {}", e);
+                }
+            }
+            CommandArgs::None => {
+                if let Err(e) = writeln!(file, "N/A") {
+                    eprintln!("Couldn't write to file: {}", e);
+                }
+            }
+            _ => unimplemented!(),
+        }
+
         CommandResult::Ok(None)
     }
 }

@@ -69,7 +69,7 @@ fn segments_seed(courinte: &Coroutine<Segment>) {
             duration: 0.444,
             dr: DecodingResult {
                 tokens: vec![],
-                text: "test me now".to_string(),
+                text: "test me now all this goes to file".to_string(),
                 avg_logprob: 0.1,
                 no_speech_prob: 0.4,
                 temperature: 0.0,
