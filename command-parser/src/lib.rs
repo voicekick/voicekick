@@ -1,6 +1,9 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use strsim::levenshtein;
+
+mod error;
+pub use error::CommandParserError;
 
 #[derive(Debug)]
 #[non_exhaustive]
@@ -23,16 +26,70 @@ impl Default for CommandArgs {
     }
 }
 
-pub trait CommandAction: Send + Sync {
+pub trait CommandAction: Sync + Send {
     fn execute(&self, args: CommandArgs) -> CommandResult;
 }
 
-type CommandReturn<'s> = (&'s dyn CommandAction, CommandArgs);
+type CommandReturn<'s> = (Arc<dyn CommandAction>, CommandArgs);
 
 /// A simple command parser that matches commands based on Levenshtein distance
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct CommandParser {
-    namespaces: Arc<Vec<Namespace>>,
+    inner: Arc<CommandParserInner>,
+}
+
+impl CommandParser {
+    /// Creates a new `CommandParserBuilder`
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Registers a new namespace with a specific threshold
+    // TODO: add parsing strategy per command with several options (levenstein, regex) and allow custom
+    pub fn register_namespace(
+        &self,
+        name: &str,
+        threshold: Option<usize>,
+    ) -> Result<&Self, CommandParserError> {
+        self.inner.namespaces.write()?.push(Namespace {
+            name: name.to_string(),
+            threshold: threshold.unwrap_or(1),
+            commands: Vec::new(),
+        });
+        Ok(&self)
+    }
+
+    /// Registers a new command under a specific namespace
+    pub fn register_command(
+        &self,
+        namespace: impl AsRef<str>,
+        name: impl AsRef<str>,
+        command: Arc<dyn CommandAction>,
+    ) -> Result<&Self, CommandParserError> {
+        if let Some(ns) = self
+            .inner
+            .namespaces
+            .write()?
+            .iter_mut()
+            .find(|ns| ns.name == namespace.as_ref())
+        {
+            ns.commands.push(Command {
+                command_parts_count: name.as_ref().split_whitespace().count(),
+                name: name.as_ref().into(),
+                command,
+            });
+            Ok(&self)
+        } else {
+            Err(CommandParserError::NamespaceNotFound(
+                namespace.as_ref().to_string(),
+            ))
+        }
+    }
+}
+
+#[derive(Default)]
+struct CommandParserInner {
+    namespaces: RwLock<Vec<Namespace>>,
 }
 
 struct Namespace {
@@ -44,69 +101,7 @@ struct Namespace {
 struct Command {
     name: String,
     command_parts_count: usize,
-    command: Box<dyn CommandAction>,
-}
-
-#[derive(Debug)]
-pub enum CommandParserError {
-    InvalidFormat,
-    NamespaceNotFound(String),
-    CommandNotFound(String),
-    NoCloseMatches(String),
-}
-
-#[derive(Default)]
-pub struct CommandParserBuilder {
-    namespaces: Vec<Namespace>,
-}
-
-impl CommandParserBuilder {
-    /// Creates a new `CommandParserBuilder`
-    pub fn new() -> Self {
-        CommandParserBuilder::default()
-    }
-
-    /// Registers a new namespace with a specific threshold
-    pub fn register_namespace(mut self, name: &str, threshold: Option<usize>) -> Self {
-        self.namespaces.push(Namespace {
-            name: name.to_string(),
-            threshold: threshold.unwrap_or(1),
-            commands: Vec::new(),
-        });
-        self
-    }
-
-    /// Registers a new command under a specific namespace
-    pub fn register_command(
-        mut self,
-        namespace: impl AsRef<str>,
-        name: impl AsRef<str>,
-        command: Box<dyn CommandAction>,
-    ) -> Result<Self, CommandParserError> {
-        if let Some(ns) = self
-            .namespaces
-            .iter_mut()
-            .find(|ns| ns.name == namespace.as_ref())
-        {
-            ns.commands.push(Command {
-                command_parts_count: name.as_ref().split_whitespace().count(),
-                name: name.as_ref().into(),
-                command,
-            });
-            Ok(self)
-        } else {
-            Err(CommandParserError::NamespaceNotFound(
-                namespace.as_ref().to_string(),
-            ))
-        }
-    }
-
-    /// Builds the `CommandParser`
-    pub fn build(self) -> CommandParser {
-        CommandParser {
-            namespaces: self.namespaces.into(),
-        }
-    }
+    command: Arc<dyn CommandAction>,
 }
 
 struct Commander<'s> {
@@ -126,7 +121,13 @@ impl CommandParser {
         let namespace_name = parts[0];
 
         // Find the namespace
-        if let Some(ns) = self.namespaces.iter().find(|ns| ns.name == namespace_name) {
+        if let Some(ns) = self
+            .inner
+            .namespaces
+            .read()?
+            .iter()
+            .find(|ns| ns.name == namespace_name)
+        {
             // Find the closest matching command
             if let Some(command) = ns
                 .commands
@@ -153,7 +154,7 @@ impl CommandParser {
                         .map(|s| CommandArgs::Some(s.join(" ")))
                         .unwrap_or_default();
 
-                    Ok((&*command.command.command, args))
+                    Ok((command.command.command.clone(), args))
                 } else {
                     Err(CommandParserError::NoCloseMatches(
                         command.user_command_text.to_string(),
@@ -184,40 +185,44 @@ mod tests {
         }
     }
 
-    fn dummy_action() -> Box<DummyCommand> {
-        Box::new(DummyCommand {})
+    fn dummy_action() -> Arc<DummyCommand> {
+        Arc::new(DummyCommand {})
     }
 
     #[test]
     fn test_register_namespace() {
-        let parser = CommandParserBuilder::new()
-            .register_namespace("test", Some(3))
-            .build();
+        let parser = CommandParser::new();
 
-        assert_eq!(parser.namespaces.len(), 1);
-        assert_eq!(parser.namespaces[0].name, "test");
-        assert_eq!(parser.namespaces[0].threshold, 3);
+        parser.register_namespace("test", Some(3)).unwrap();
+
+        let namespaces = parser.inner.namespaces.read().unwrap();
+
+        assert_eq!(namespaces.len(), 1);
+        assert_eq!(namespaces[0].name, "test");
+        assert_eq!(namespaces[0].threshold, 3);
     }
 
     #[test]
     fn test_register_command() {
-        let parser = CommandParserBuilder::new()
-            .register_namespace("test", Some(3))
-            .register_command("test", "dummy command", dummy_action())
-            .unwrap()
-            .build();
+        let parser = CommandParser::new();
 
-        assert_eq!(parser.namespaces[0].commands.len(), 1);
-        assert_eq!(parser.namespaces[0].commands[0].name, "dummy command");
+        parser
+            .register_namespace("test", Some(3))
+            .unwrap()
+            .register_command("test", "dummy command", dummy_action())
+            .unwrap();
+
+        let namespaces = parser.inner.namespaces.read().unwrap();
+
+        assert_eq!(namespaces[0].commands.len(), 1);
+        assert_eq!(namespaces[0].commands[0].name, "dummy command");
     }
 
     #[test]
     fn test_register_command_invalid_namespace() {
-        let result = CommandParserBuilder::new().register_command(
-            "invalid",
-            "dummy command",
-            dummy_action(),
-        );
+        let parser = CommandParser::new();
+
+        let result = parser.register_command("invalid", "dummy command", dummy_action());
 
         assert!(result.is_err());
         if let Err(CommandParserError::NamespaceNotFound(ns)) = result {
@@ -229,11 +234,13 @@ mod tests {
 
     #[test]
     fn test_parse_and_execute_valid_command() {
-        let parser = CommandParserBuilder::new()
+        let parser = CommandParser::new();
+
+        parser
             .register_namespace("test", Some(3))
-            .register_command("test", "dummy command", dummy_action())
             .unwrap()
-            .build();
+            .register_command("test", "dummy command", dummy_action())
+            .unwrap();
 
         let result = parser.parse("test dummy          command");
 
@@ -242,7 +249,7 @@ mod tests {
 
     #[test]
     fn test_parse_and_execute_invalid_format() {
-        let parser = CommandParserBuilder::new().build();
+        let parser = CommandParser::new();
 
         let result = parser.parse("invalid_format");
 
@@ -252,7 +259,7 @@ mod tests {
 
     #[test]
     fn test_parse_and_execute_unknown_namespace() {
-        let parser = CommandParserBuilder::new().build();
+        let parser = CommandParser::new();
 
         let result = parser.parse("unknown_namespace command");
 
@@ -266,9 +273,9 @@ mod tests {
 
     #[test]
     fn test_parse_and_execute_unknown_command() {
-        let parser = CommandParserBuilder::new()
-            .register_namespace("test", Some(3))
-            .build();
+        let parser = CommandParser::new();
+
+        parser.register_namespace("test", Some(3)).unwrap();
 
         let result = parser.parse("test unknown_command");
 
@@ -282,11 +289,13 @@ mod tests {
 
     #[test]
     fn test_parse_and_execute_no_close_matches() {
-        let parser = CommandParserBuilder::new()
-            .register_namespace("test", None) // Low threshold for testing
+        let parser = CommandParser::new();
+
+        parser
+            .register_namespace("test", None)
+            .unwrap() // Low threshold for testing
             .register_command("test", "dummy command", dummy_action())
-            .unwrap()
-            .build();
+            .unwrap();
 
         let result = parser.parse("test dommm command"); // Intentional typo
 
@@ -300,17 +309,21 @@ mod tests {
 
     #[test]
     fn test_parse_and_execute_close_match() {
-        let parser = CommandParserBuilder::new()
-            .register_namespace("test", None) // Toleration for one character difference
-            .register_namespace("move", Some(3)) // Toleration for three character difference
-            .register_namespace("move2", Some(5)) // Toleration for five character difference
+        let parser = CommandParser::new();
+
+        parser
+            .register_namespace("test", None)
+            .unwrap() // Toleration for one character difference
+            .register_namespace("move", Some(3))
+            .unwrap() // Toleration for three character difference
+            .register_namespace("move2", Some(5))
+            .unwrap() // Toleration for five character difference
             .register_command("test", "dummy command", dummy_action())
             .unwrap()
             .register_command("move", "backwards command", dummy_action())
             .unwrap()
             .register_command("move2", "backwards command", dummy_action())
-            .unwrap()
-            .build();
+            .unwrap();
 
         let result = parser.parse("test dummm command"); // Intentional typo
         assert!(result.is_ok());

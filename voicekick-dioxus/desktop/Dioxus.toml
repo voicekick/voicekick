@@ -1,0 +1,7 @@
+[application]
+# App name
+name = "VoiceKick"
+
+[web.app]
+# HTML title tag content
+title = "VoiceKick"

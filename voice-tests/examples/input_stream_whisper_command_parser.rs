@@ -1,4 +1,6 @@
-use command_parser::{CommandAction, CommandArgs, CommandParserBuilder, CommandResult};
+use std::sync::Arc;
+
+use command_parser::{CommandAction, CommandArgs, CommandParser, CommandResult};
 use tokio::io::{self, AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
 use tracing_subscriber::filter::LevelFilter;
@@ -24,8 +26,8 @@ impl CommandAction for DummyCommand {
     }
 }
 
-fn dummy_action() -> Box<DummyCommand> {
-    Box::new(DummyCommand {})
+fn dummy_action() -> Arc<DummyCommand> {
+    Arc::new(DummyCommand {})
 }
 
 #[tokio::main]
@@ -68,11 +70,13 @@ async fn main() -> Result<(), VoiceInputError> {
         voice_whisper::WhisperBuilder::infer(WhichModel::BaseEn, Some("en"))?.build()?;
 
     tokio::spawn(async move {
-        let parser = CommandParserBuilder::new()
-            .register_namespace("test", Some(1)) // Toleration for one character difference
+        let parser = CommandParser::new();
+
+        parser
+            .register_namespace("test", Some(1))
+            .unwrap() // Toleration for one character difference
             .register_command("test", "backwards command", dummy_action())
-            .unwrap()
-            .build();
+            .unwrap();
 
         loop {
             match rx.recv().await {

@@ -84,7 +84,7 @@ async fn main() -> Result<(), VoiceInputError> {
             match rx.recv().await {
                 Some(samples) => {
                     for sample in samples {
-                        if let Err(e) = producer.try_push(sample) {
+                        if let Err(_e) = producer.try_push(sample) {
                             output_fell_behind = true;
                             break;
                         }

@@ -1,4 +1,6 @@
-use command_parser::{CommandAction, CommandArgs, CommandParserBuilder, CommandResult};
+use std::sync::Arc;
+
+use command_parser::{CommandAction, CommandArgs, CommandParser, CommandResult};
 use voice_tests::{preprocess_samples, read_voice_dataset_wav_into_samples};
 use voice_whisper::WhichModel;
 
@@ -19,8 +21,8 @@ impl CommandAction for DummyCommand {
     }
 }
 
-fn dummy_action() -> Box<DummyCommand> {
-    Box::new(DummyCommand {})
+fn dummy_action() -> Arc<DummyCommand> {
+    Arc::new(DummyCommand {})
 }
 
 #[tokio::test]
@@ -61,11 +63,13 @@ async fn test_command_parser() {
     assert_eq!(got.len(), 1, "fail {:?}", got);
     similar_asserts::assert_eq!(got[0].dr.text, expected, "fail {:?}", got);
 
-    let parser = CommandParserBuilder::new()
-        .register_namespace("americans", Some(1)) // Toleration for one character difference
+    let parser = CommandParser::new();
+
+    parser
+        .register_namespace("americans", Some(1))
+        .unwrap() // Toleration for one character difference
         .register_command("americans", "ask now", dummy_action())
-        .unwrap()
-        .build();
+        .unwrap();
 
     match parser.parse(got[0].dr.text.as_str()) {
         Ok((cmd, arg)) => {

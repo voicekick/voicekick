@@ -1,9 +1,7 @@
-use std::fs::OpenOptions;
 use std::io::prelude::*;
+use std::{fs::OpenOptions, sync::Arc};
 
-use command_parser::{
-    CommandAction, CommandArgs, CommandParser, CommandParserBuilder, CommandResult,
-};
+use command_parser::{CommandAction, CommandArgs, CommandParser, CommandResult};
 
 struct DummyCommand;
 
@@ -36,16 +34,18 @@ impl CommandAction for DummyCommand {
     }
 }
 
-fn dummy_action() -> Box<DummyCommand> {
-    Box::new(DummyCommand {})
+fn dummy_action() -> Arc<DummyCommand> {
+    Arc::new(DummyCommand {})
 }
 
 pub fn all() -> CommandParser {
-    let parser = CommandParserBuilder::new()
-        .register_namespace("test", Some(1)) // Toleration for one character difference
+    let parser = CommandParser::new();
+
+    parser
+        .register_namespace("test", Some(1))
+        .unwrap() // Toleration for one character difference
         .register_command("test", "me", dummy_action())
-        .expect("TODO: fix")
-        .build();
+        .expect("TODO: fix");
 
     parser
 }

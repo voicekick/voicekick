@@ -51,11 +51,7 @@ async fn main() -> Result<(), VoiceInputError> {
                 Some(samples) => {
                     println!("Received samples: {}", samples.len());
                     match whisper.with_mel_segments(&samples) {
-                        Ok(segments) => {
-                            // let got = whisper.decode_with_fallback(&mel);
-
-                            // println!("{:?}", got);
-                        }
+                        Ok(_segments) => {}
                         Err(e) => {
                             print!("with_mel_segments error {:?}", e);
                         }
