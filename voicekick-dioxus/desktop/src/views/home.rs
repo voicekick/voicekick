@@ -1,6 +1,8 @@
 use dioxus::prelude::*;
 
-use crate::components::{SegmentsLogComponent, VoiceComponent, WaveformComponent};
+use crate::components::{
+    CommandsBoxComponent, SegmentsLogComponent, VoiceComponent, WaveformComponent,
+};
 
 #[component]
 pub fn Home() -> Element {
@@ -9,7 +11,8 @@ pub fn Home() -> Element {
 
         WaveformComponent {}
 
-        SegmentsLogComponent {}
+        CommandsBoxComponent {}
 
+        SegmentsLogComponent {}
     }
 }

@@ -89,3 +89,8 @@ impl Default for VoiceConfigState {
         }
     }
 }
+
+#[derive(Clone, Debug, Default)]
+pub struct CommandsBoxState {
+    pub selected_namespace: Signal<Option<String>>,
+}

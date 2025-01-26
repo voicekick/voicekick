@@ -1,0 +1,81 @@
+.commands-outer-container {
+  padding: 2rem;
+  background-color: #f0f0f0;
+  margin: 16px 0;
+  border-radius: 8px;
+}
+
+.commands-outer-container p {
+  margin-top: 0;
+}
+
+.commands-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 1rem;
+  margin: 0 auto;
+}
+
+.namespace-container {
+  aspect-ratio: 1;
+  background: #a96ad9;
+  color: white;
+  border: none;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.namespace-header {
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin-bottom: 1rem;
+}
+
+.namespace-content {
+  font-size: 0.75rem;
+  opacity: 0.9;
+}
+
+.command-item {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0.25rem 0;
+}
+
+.namespace-container:nth-child(6n+1) {
+  background: #0063b1;
+}
+
+.namespace-container:nth-child(6n+2) {
+  background: #107c10;
+}
+
+.namespace-container:nth-child(6n+3) {
+  background: #5c2d91;
+}
+
+.namespace-container:nth-child(6n+4) {
+  background: #d83b01;
+}
+
+.namespace-container:nth-child(6n+5) {
+  background: #008272;
+}
+
+.namespace-container:nth-child(6n) {
+  background: #8e6f32;
+}
+
+.namespace-container:hover {
+  filter: brightness(110%);
+  transform: scale(1.05);
+}
+
+.namespace-container.selected {
+  filter: brightness(70%);
+  outline: 5px solid white;
+}

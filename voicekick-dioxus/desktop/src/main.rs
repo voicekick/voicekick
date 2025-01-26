@@ -7,7 +7,7 @@ mod services;
 mod states;
 mod views;
 
-use states::{VoiceConfigState, VoiceState};
+use states::{CommandsBoxState, VoiceConfigState, VoiceState};
 use ui::Navbar;
 use views::{Home, Whisper};
 
@@ -38,6 +38,7 @@ fn App() -> Element {
     use_context_provider(|| VoiceState::default());
     use_context_provider(|| VoiceConfigState::default());
     use_context_provider(|| commands::all());
+    use_context_provider(|| CommandsBoxState::default());
 
     rsx! {
         // Global app resources

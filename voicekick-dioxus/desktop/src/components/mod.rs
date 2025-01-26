@@ -9,3 +9,6 @@ pub use waveform::WaveformComponent;
 
 mod segments_log;
 pub use segments_log::SegmentsLogComponent;
+
+mod commands_box;
+pub use commands_box::CommandsBoxComponent;

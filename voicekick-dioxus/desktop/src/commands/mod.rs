@@ -43,9 +43,15 @@ pub fn all() -> CommandParser {
 
     parser
         .register_namespace("test", Some(1))
-        .unwrap() // Toleration for one character difference
+        .unwrap()
+        .register_namespace("new", Some(1))
+        .unwrap()
         .register_command("test", "me", dummy_action())
-        .expect("TODO: fix");
+        .unwrap()
+        .register_command("new", "nothign", dummy_action())
+        .unwrap()
+        .register_command("new", "not a thing", dummy_action())
+        .unwrap();
 
     parser
 }

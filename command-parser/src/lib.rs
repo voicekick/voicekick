@@ -1,4 +1,7 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, RwLock},
+};
 
 use strsim::levenshtein;
 
@@ -84,6 +87,59 @@ impl CommandParser {
                 namespace.as_ref().to_string(),
             ))
         }
+    }
+
+    /// Removes a command from a namespace
+    pub fn remove_command(
+        &self,
+        namespace: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> Result<bool, CommandParserError> {
+        if let Some(ns) = self
+            .inner
+            .namespaces
+            .write()?
+            .iter_mut()
+            .find(|ns| ns.name == namespace.as_ref())
+        {
+            if let Some(index) = ns.commands.iter().position(|cmd| cmd.name == name.as_ref()) {
+                ns.commands.remove(index);
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Removes a namespace and all its commands
+    pub fn remove_namespace(&self, name: impl AsRef<str>) -> Result<bool, CommandParserError> {
+        let mut namespaces = self.inner.namespaces.write()?;
+        if let Some(index) = namespaces.iter().position(|ns| ns.name == name.as_ref()) {
+            namespaces.remove(index);
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    /// Retrieve all availabe namescapes with commands
+    pub fn commands(&self) -> Result<BTreeMap<String, Vec<String>>, CommandParserError> {
+        let commands = self
+            .inner
+            .namespaces
+            .read()?
+            .iter()
+            .map(|namespace| {
+                (
+                    namespace.name.clone(),
+                    namespace
+                        .commands
+                        .iter()
+                        .map(|command| command.name.clone())
+                        .collect(),
+                )
+            })
+            .collect();
+
+        Ok(commands)
     }
 }
 
