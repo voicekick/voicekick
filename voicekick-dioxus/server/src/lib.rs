@@ -8,13 +8,10 @@ use params::CommandParams;
 use tokio::net::TcpListener;
 use tracing::info;
 
-mod database;
-pub use database::Database;
 mod error;
 pub mod events;
 mod extractors;
 mod params;
-mod state;
 
 /// Start the server
 pub async fn serve(routes: Router) -> Result<(), ServerError> {
