@@ -6,7 +6,7 @@ use dioxus::{
 };
 use futures_util::StreamExt;
 
-use command_parser::{CommandOutput, CommandParser, CommandParserError, CommandResult};
+use command_parser::{CommandOutput, CommandParser, CommandParserError};
 use inference_candle::proto::Segment;
 use tracing::error;
 
