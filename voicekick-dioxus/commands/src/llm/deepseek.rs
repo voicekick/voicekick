@@ -21,7 +21,7 @@ impl Default for DeepseekChatCommand {
         let should_stream: Option<bool> = None;
 
         let backend = DeepSeek::new(
-            api_key.expect("TODO: fix"),
+            api_key.unwrap_or("TODO: fix".into()),
             Some(model.into()),
             max_tokens,
             temperature,

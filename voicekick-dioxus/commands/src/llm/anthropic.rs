@@ -24,7 +24,7 @@ impl Default for AnthropicChatCommand {
         let tools: Option<Vec<Tool>> = None;
 
         let backend = Anthropic::new(
-            api_key.expect("TODO: fix"),
+            api_key.unwrap_or("TODO: fix".into()),
             Some(model.into()),
             max_tokens,
             temperature,

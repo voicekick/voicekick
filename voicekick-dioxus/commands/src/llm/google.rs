@@ -23,7 +23,7 @@ impl Default for GoogleChatCommand {
         let top_k: Option<u32> = None;
 
         let backend = Google::new(
-            api_key.expect("TODO: fix"),
+            api_key.unwrap_or("TODO: fix".into()),
             Some(model.into()),
             max_tokens,
             temperature,

@@ -26,7 +26,7 @@ impl Default for OpenaiChatCommand {
         let embedding_dimensions: Option<u32> = None;
 
         let open_ai = OpenAI::new(
-            api_key.expect("TODO: fix"),
+            api_key.unwrap_or("TODO: fix".into()),
             Some(model.into()),
             max_tokens,
             temperature,
