@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use server::events::ServerEventsBroadcaster;
 use tracing::Level;
 
+mod commands;
 mod components;
 mod services;
 mod states;
@@ -36,10 +37,13 @@ fn App() -> Element {
 
     tokio::spawn(server::serve(routes));
 
+    let parser = CommandParser::new();
+    commands::init(&parser).expect("TODO: fix");
+
     // Init states
     use_context_provider(VoiceState::default);
     use_context_provider(VoiceConfigState::default);
-    use_context_provider(CommandParser::new);
+    use_context_provider(|| parser);
     use_context_provider(CommandsBoxState::default);
     use_context_provider(|| braodcaster);
 
