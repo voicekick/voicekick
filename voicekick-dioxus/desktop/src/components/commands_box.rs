@@ -9,10 +9,13 @@ const CSS: Asset = asset!("/assets/commands_box.css");
 pub fn CommandsBoxComponent() -> Element {
     let parser = use_context::<CommandParser>();
     let mut command_box_state = use_context::<CommandsBoxState>();
+    let mut available_commands = use_signal(|| parser.commands().unwrap_or_default());
 
-    let commands = parser.commands().unwrap_or_default();
+    use_effect(move || {
+        available_commands.set(parser.commands().unwrap_or_default());
+    });
 
-    let commands_rendered = commands.into_iter().map(|(namespace, cmds)| {
+    let commands_rendered = (available_commands.read()).clone().into_iter().map(|(namespace, cmds)| {
         let is_selected = if command_box_state
             .selected_namespace
             .read()

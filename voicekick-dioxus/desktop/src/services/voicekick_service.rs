@@ -91,7 +91,7 @@ pub async fn voicekick_service(mut rx: UnboundedReceiver<VoiceKickCommand>) {
     let mut voice_stream = new_voice_stream(
         &voice_config_state.selected_input_device.read(),
         samples_tx.clone(),
-        voice_config_state.silero_voice_threshold.read().clone(),
+        *voice_config_state.silero_voice_threshold.read(),
     )
     .expect("TODO: fix");
 
@@ -106,13 +106,13 @@ pub async fn voicekick_service(mut rx: UnboundedReceiver<VoiceKickCommand>) {
             language.as_deref(),
         )
         .expect("TODO: fix")
-        .temperatures(vec![voice_config_state.temperature.read().clone()])
-        .repetition_penalty(voice_config_state.repetition_penalty.read().clone())
-        .repetition_frequency(voice_config_state.repetition_frequency.read().clone())
-        .boost_value(voice_config_state.boost_value.read().clone())
-        .command_boost_value(voice_config_state.command_boost_value.read().clone())
-        .no_speech_threshold(voice_config_state.no_speech_threshold.read().clone())
-        .logprob_threshold(voice_config_state.logprob_threshold.read().clone())
+        .temperatures(vec![*voice_config_state.temperature.read()])
+        .repetition_penalty(*voice_config_state.repetition_penalty.read())
+        .repetition_frequency(*voice_config_state.repetition_frequency.read())
+        .boost_value(*voice_config_state.boost_value.read())
+        .command_boost_value(*voice_config_state.command_boost_value.read())
+        .no_speech_threshold(*voice_config_state.no_speech_threshold.read())
+        .logprob_threshold(*voice_config_state.logprob_threshold.read())
         .build()
         .expect("TODO: fix")
     };

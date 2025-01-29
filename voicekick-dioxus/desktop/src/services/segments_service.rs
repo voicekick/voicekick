@@ -6,7 +6,7 @@ use dioxus::{
 };
 use futures_util::StreamExt;
 
-use command_parser::{CommandParser, CommandParserError, CommandResult};
+use command_parser::{CommandOutput, CommandParser, CommandParserError, CommandResult};
 use inference_candle::proto::Segment;
 use tracing::error;
 
@@ -37,19 +37,19 @@ pub async fn segments_service(mut rx: UnboundedReceiver<Segment>) {
         match parser.parse(&voice_text) {
             Ok((cmd, arg)) => {
                 // Execute function
-                match cmd.execute(arg) {
-                    CommandResult::Ok(msg) => {
+                match cmd.execute(arg).await {
+                    Ok(CommandOutput::Ok(msg)) => {
                         *command_text.write() = msg.unwrap_or("Ok".into());
                         *status.write() = VoiceCommandStatus::Success;
                     }
-                    CommandResult::Error(e) => {
+                    Ok(CommandOutput::None) => {
+                        *command_text.write() = "Ok".into();
+                        *status.write() = VoiceCommandStatus::Success;
+                    }
+                    Err(e) => {
                         error!("Command error {:?}", e);
                         *command_text.write() = format!("Error: {}", e);
                         *status.write() = VoiceCommandStatus::Failed;
-                    }
-                    CommandResult::None => {
-                        *command_text.write() = "Ok".into();
-                        *status.write() = VoiceCommandStatus::Success;
                     }
                     _ => {}
                 }

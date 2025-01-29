@@ -1,7 +1,8 @@
+use command_parser::CommandParser;
 use dioxus::prelude::*;
+use server::events::ServerEventsBroadcaster;
 use tracing::Level;
 
-mod commands;
 mod components;
 mod services;
 mod states;
@@ -30,15 +31,22 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    tokio::spawn(server::serve());
+    let braodcaster = ServerEventsBroadcaster::new(1000);
+    let routes = server::routes(braodcaster.clone());
 
-    // Build cool things ✌️
+    tokio::spawn(server::serve(routes));
+
+    // Init states
+    use_context_provider(VoiceState::default);
+    use_context_provider(VoiceConfigState::default);
+    use_context_provider(CommandParser::new);
+    use_context_provider(CommandsBoxState::default);
+    use_context_provider(|| braodcaster);
+
+    // Init services
     use_coroutine(services::voicekick_service);
     use_coroutine(services::segments_service);
-    use_context_provider(|| VoiceState::default());
-    use_context_provider(|| VoiceConfigState::default());
-    use_context_provider(|| commands::all());
-    use_context_provider(|| CommandsBoxState::default());
+    use_coroutine(services::server_service);
 
     rsx! {
         // Global app resources

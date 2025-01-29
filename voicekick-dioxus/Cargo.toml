@@ -4,6 +4,8 @@ members = [
   "ui",
   "desktop",
   "server",
+  "proto",
+  "commands",
 ]
 
 [workspace.dependencies]

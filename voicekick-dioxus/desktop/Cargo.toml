@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-dioxus = { workspace = true, features = ["router", "dioxus-cli-config", "asset", "macro", "signals", "hooks", "fullstack", "launch"] }
+dioxus = { workspace = true, features = ["router", "dioxus-cli-config", "asset", "macro", "signals", "hooks", "launch"] }
 ui = { workspace = true }
 voice-stream = { path = "../../voice-stream" }
 voice-whisper = { path = "../../voice-whisper" }
@@ -14,6 +14,8 @@ tracing = "0.1"
 inference-candle = { path = "../../inference-candle" }
 server = { path = "../server" }
 command-parser = { path = "../../command-parser" }
+commands = { path = "../commands" }
+ort-sys = "=2.0.0-rc.8"
 
 [features]
 default = ["desktop"]
