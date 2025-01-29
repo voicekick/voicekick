@@ -1,6 +1,7 @@
 use command_parser::{async_trait, CommandAction, CommandArgs, CommandOutput, CommandResult};
 
 /// Vocie log command
+#[derive(Default)]
 pub struct VoiceLogCommand;
 
 #[async_trait]
