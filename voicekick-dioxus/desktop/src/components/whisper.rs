@@ -23,7 +23,7 @@ pub fn WhisperComponent() -> Element {
     };
 
     let handle_language_change = move |evt: Event<FormData>| {
-        let language: String = evt.value().into();
+        let language: String = evt.value();
 
         if *voice_config_state.current_language.read() != language {
             voice_config_state.current_language.set(language.clone());
@@ -94,10 +94,14 @@ pub fn WhisperComponent() -> Element {
         }
     };
 
+    let current_model = *voice_config_state.current_model.read();
+
     let models_rendered = WhichModel::iter().map(|model| {
+        let current_model_string = current_model.to_string();
         rsx! {
             option {
                 value: "{model}",
+                selected: *model == current_model_string,
                 "{model}"
             }
         }
@@ -107,6 +111,7 @@ pub fn WhisperComponent() -> Element {
         rsx! {
             option {
                 value: "{code}",
+                selected: *code == voice_config_state.current_language.read().as_str(),
                 "{lang}"
             }
         }
@@ -123,7 +128,7 @@ pub fn WhisperComponent() -> Element {
             select {
                 disabled: is_disabled,
                 id: "model-select",
-                value: "{voice_config_state.current_model.read()}",
+                value: "{current_model}",
                 onchange: handle_model_change,
                 {models_rendered}
             }
@@ -136,7 +141,7 @@ pub fn WhisperComponent() -> Element {
                 "Whisper language "
             }
             select {
-                disabled: !voice_config_state.current_model.read().is_multilingual() || is_disabled,
+                disabled: !current_model.is_multilingual() || is_disabled,
                 id: "language-select",
                 value: "{voice_config_state.current_language.read()}",
                 onchange: handle_language_change,

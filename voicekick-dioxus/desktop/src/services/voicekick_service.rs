@@ -138,7 +138,7 @@ pub async fn voicekick_service(mut rx: UnboundedReceiver<VoiceKickCommand>) {
                         voice_stream = new_voice_stream(
                             &voice_config_state.selected_input_device.read(),
                             samples_tx.clone(),
-                            voice_config_state.silero_voice_threshold.read().clone(),
+                            *voice_config_state.silero_voice_threshold.read(),
                         )
                         .expect("TODO: fix");
                     }
@@ -151,43 +151,40 @@ pub async fn voicekick_service(mut rx: UnboundedReceiver<VoiceKickCommand>) {
                 }
             }
             samples = samples_rx.recv() => {
-                match samples {
-                    Some(new_samples) => {
-                        if new_samples.is_empty() {
-                            voice_state.raw_samples.push(vec![]); // push empty vector to keep track of silence
-                        } else {
-                            // Cloning here to propogate raw_samples as fast as possible to
-                            // visualize them on waveform component before actual transcribing
-                            // will begin which will take some time
-                            voice_state.raw_samples.push(new_samples.clone());
+                if let Some(new_samples) = samples {
+                    if new_samples.is_empty() {
+                        voice_state.raw_samples.push(vec![]); // push empty vector to keep track of silence
+                    } else {
+                        // Cloning here to propogate raw_samples as fast as possible to
+                        // visualize them on waveform component before actual transcribing
+                        // will begin which will take some time
+                        voice_state.raw_samples.push(new_samples.clone());
 
-                            if voice_state.raw_samples.len() > MAX_RAW_SAMPLES {
-                                let recent_samples = voice_state
-                                    .raw_samples
-                                    .split_off(voice_state.raw_samples.len() - MAX_RAW_SAMPLES);
-                                voice_state.raw_samples.clear();
-                                voice_state.raw_samples.extend(recent_samples);
-                            }
+                        if voice_state.raw_samples.len() > MAX_RAW_SAMPLES {
+                            let recent_samples = voice_state
+                                .raw_samples
+                                .split_off(voice_state.raw_samples.len() - MAX_RAW_SAMPLES);
+                            voice_state.raw_samples.clear();
+                            voice_state.raw_samples.extend(recent_samples);
+                        }
 
-                            match whisper.with_mel_segments(&new_samples) {
-                                Ok(new_segments) => {
-                                    if !new_segments
-                                        .last()
-                                        .map(|segment| segment.dr.text.is_empty())
-                                        .unwrap_or(false)
-                                    {
-                                        for segment in new_segments {
-                                            segment_task.send(segment);
-                                        }
+                        match whisper.with_mel_segments(&new_samples) {
+                            Ok(new_segments) => {
+                                if !new_segments
+                                    .last()
+                                    .map(|segment| segment.dr.text.is_empty())
+                                    .unwrap_or(false)
+                                {
+                                    for segment in new_segments {
+                                        segment_task.send(segment);
                                     }
                                 }
-                                Err(e) => {
-                                    error!("with_mel_segments error {:?}", e);
-                                }
+                            }
+                            Err(e) => {
+                                error!("with_mel_segments error {:?}", e);
                             }
                         }
                     }
-                    None => {}
                 }
             }
         }

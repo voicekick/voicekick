@@ -24,6 +24,7 @@ pub fn VoiceComponent() -> Element {
         rsx! {
             option {
                 value: "{device}",
+                selected: *device == voice_config_state.selected_input_device.read().as_str(),
                 "{device}"
             }
         }
