@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+pub use async_trait::async_trait;
 use strsim::levenshtein;
 
 mod error;
@@ -10,11 +11,12 @@ pub use error::CommandParserError;
 
 #[derive(Debug)]
 #[non_exhaustive]
-pub enum CommandResult {
+pub enum CommandOutput {
     Ok(Option<String>),
-    Error(Box<dyn std::error::Error>),
     None,
 }
+
+pub type CommandResult = Result<CommandOutput, Box<dyn std::error::Error>>;
 
 #[derive(Debug)]
 #[non_exhaustive]
@@ -29,8 +31,10 @@ impl Default for CommandArgs {
     }
 }
 
+#[async_trait]
 pub trait CommandAction: Sync + Send {
-    fn execute(&self, args: CommandArgs) -> CommandResult;
+    async fn execute(&self, args: CommandArgs)
+        -> Result<CommandOutput, Box<dyn std::error::Error>>;
 }
 
 type CommandReturn<'s> = (Arc<dyn CommandAction>, CommandArgs);
@@ -54,12 +58,19 @@ impl CommandParser {
         name: &str,
         threshold: Option<usize>,
     ) -> Result<&Self, CommandParserError> {
-        self.inner.namespaces.write()?.push(Namespace {
-            name: name.to_string(),
-            threshold: threshold.unwrap_or(1),
-            commands: Vec::new(),
-        });
-        Ok(&self)
+        let mut namespaces = self.inner.namespaces.write()?;
+
+        if let Some(pos) = namespaces.iter().position(|ns| ns.name == name) {
+            namespaces[pos].threshold = threshold.unwrap_or(1);
+        } else {
+            namespaces.push(Namespace {
+                name: name.to_string(),
+                threshold: threshold.unwrap_or(1),
+                commands: Vec::new(),
+            });
+        }
+
+        Ok(self)
     }
 
     /// Registers a new command under a specific namespace
@@ -81,7 +92,7 @@ impl CommandParser {
                 name: name.as_ref().into(),
                 command,
             });
-            Ok(&self)
+            Ok(self)
         } else {
             Err(CommandParserError::NamespaceNotFound(
                 namespace.as_ref().to_string(),
@@ -235,9 +246,10 @@ mod tests {
 
     struct DummyCommand;
 
+    #[async_trait]
     impl CommandAction for DummyCommand {
-        fn execute(&self, _args: CommandArgs) -> CommandResult {
-            CommandResult::Ok(None)
+        async fn execute(&self, _args: CommandArgs) -> CommandResult {
+            Ok(CommandOutput::Ok(None))
         }
     }
 

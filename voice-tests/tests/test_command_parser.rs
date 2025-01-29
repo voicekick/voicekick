@@ -1,13 +1,16 @@
 use std::sync::Arc;
 
-use command_parser::{CommandAction, CommandArgs, CommandParser, CommandResult};
+use command_parser::{
+    async_trait, CommandAction, CommandArgs, CommandOutput, CommandParser, CommandResult,
+};
 use voice_tests::{preprocess_samples, read_voice_dataset_wav_into_samples};
 use voice_whisper::WhichModel;
 
 struct DummyCommand;
 
+#[async_trait]
 impl CommandAction for DummyCommand {
-    fn execute(&self, args: CommandArgs) -> CommandResult {
+    async fn execute(&self, args: CommandArgs) -> CommandResult {
         match args {
             CommandArgs::None => {
                 println!("No arguments");
@@ -17,7 +20,7 @@ impl CommandAction for DummyCommand {
             }
             _ => {}
         }
-        CommandResult::Ok(None)
+        Ok(CommandOutput::Ok(None))
     }
 }
 

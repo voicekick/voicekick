@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use command_parser::{CommandAction, CommandArgs, CommandParser, CommandResult};
+use command_parser::{
+    async_trait, CommandAction, CommandArgs, CommandOutput, CommandParser, CommandResult,
+};
 use tokio::io::{self, AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
 use tracing_subscriber::filter::LevelFilter;
@@ -11,8 +13,9 @@ use voice_whisper::WhichModel;
 
 struct DummyCommand;
 
+#[async_trait]
 impl CommandAction for DummyCommand {
-    fn execute(&self, args: CommandArgs) -> CommandResult {
+    async fn execute(&self, args: CommandArgs) -> CommandResult {
         match args {
             CommandArgs::None => {
                 println!("No arguments");
@@ -22,7 +25,7 @@ impl CommandAction for DummyCommand {
             }
             _ => {}
         }
-        CommandResult::Ok(None)
+        Ok(CommandOutput::Ok(None))
     }
 }
 
