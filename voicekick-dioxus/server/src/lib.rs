@@ -36,7 +36,7 @@ async fn register_command(
 ) -> Result<impl IntoResponse, ServerError> {
     let commandment = params.into();
 
-    let _ = state.emit(Event::RegisterCommandment(commandment)).await?;
+    let _ = state.emit(Event::RegisterHttpCommandment(commandment)).await?;
 
     Ok(StatusCode::ACCEPTED)
 }

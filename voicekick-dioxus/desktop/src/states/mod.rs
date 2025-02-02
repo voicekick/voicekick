@@ -70,6 +70,10 @@ pub struct VoiceConfigState {
     pub command_boost_value: Signal<f32>,
     pub no_speech_threshold: Signal<f64>,
     pub logprob_threshold: Signal<f64>,
+
+    pub boost_words: Signal<Vec<String>>,
+    pub command_words: Signal<Vec<String>>,
+    pub penalty_words: Signal<Vec<String>>,
 }
 
 impl Default for VoiceConfigState {
@@ -86,6 +90,10 @@ impl Default for VoiceConfigState {
             command_boost_value: Signal::new(3.0),
             no_speech_threshold: Signal::new(0.7),
             logprob_threshold: Signal::new(-1.5),
+
+            boost_words: Signal::new(vec![]),
+            command_words: Signal::new(vec![]),
+            penalty_words: Signal::new(vec![]),
         }
     }
 }

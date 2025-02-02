@@ -113,6 +113,9 @@ pub async fn voicekick_service(mut rx: UnboundedReceiver<VoiceKickCommand>) {
         .command_boost_value(*voice_config_state.command_boost_value.read())
         .no_speech_threshold(*voice_config_state.no_speech_threshold.read())
         .logprob_threshold(*voice_config_state.logprob_threshold.read())
+        .add_boost_words(&voice_config_state.boost_words.read(), None)
+        .add_command_words(&voice_config_state.command_words.read(), None)
+        .add_penalty_words(&voice_config_state.penalty_words.read(), None)
         .build()
         .expect("TODO: fix")
     };

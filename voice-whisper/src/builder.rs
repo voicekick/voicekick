@@ -24,7 +24,11 @@ macro_rules! create_token_setters {
         }
 
         /// Add words as tokens to the existing field
-        pub fn $fn_name_add_words(mut self, words: &[&str], spacing: Option<WithSpace>) -> Self {
+        pub fn $fn_name_add_words<T: AsRef<str>>(
+            mut self,
+            words: &[T],
+            spacing: Option<WithSpace>,
+        ) -> Self {
             let tokens = vector_into_tokens(&self.tokenizer, words, spacing);
             self.$field_name.extend(tokens);
             self

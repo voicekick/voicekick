@@ -248,9 +248,9 @@ pub enum WithSpace {
 }
 
 /// Convert a vector of strings into a vector of token IDs.
-pub fn vector_into_tokens(
+pub fn vector_into_tokens<T: AsRef<str>>(
     tokenizer: &Tokenizer,
-    input: &[&str],
+    input: &[T],
     with_space: Option<WithSpace>,
 ) -> Vec<u32> {
     let encode = |n: &str| -> Vec<u32> {
@@ -265,14 +265,18 @@ pub fn vector_into_tokens(
         input
             .iter()
             .flat_map(|n| match s {
-                WithSpace::Before => encode(&format!(" {n}")),
+                WithSpace::Before => encode(&format!(" {}", n.as_ref())),
             })
             .collect()
     } else {
         vec![]
     };
 
-    input.iter().flat_map(|n| encode(n)).chain(spaced).collect()
+    input
+        .iter()
+        .flat_map(|n| encode(n.as_ref()))
+        .chain(spaced)
+        .collect()
 }
 
 impl SpeechRecognitionModel for Model {

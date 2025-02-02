@@ -9,7 +9,7 @@ use tracing::{error, info};
 
 #[derive(Debug, Clone)]
 pub enum Event {
-    RegisterCommandment(Commandment),
+    RegisterHttpCommandment(Commandment),
 }
 
 pub type BroadTx = broadcast::Sender<Event>;
