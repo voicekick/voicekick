@@ -87,11 +87,18 @@ impl CommandParser {
             .iter_mut()
             .find(|ns| ns.name == namespace.as_ref())
         {
-            ns.commands.push(Command {
+            let value = Command {
                 command_parts_count: name.as_ref().split_whitespace().count(),
                 name: name.as_ref().into(),
                 command,
-            });
+            };
+
+            if let Some(pos) = ns.commands.iter().position(|cmd| cmd.name == name.as_ref()) {
+                ns.commands[pos] = value
+            } else {
+                ns.commands.push(value);
+            }
+
             Ok(self)
         } else {
             Err(CommandParserError::NamespaceNotFound(
