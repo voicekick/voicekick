@@ -54,6 +54,22 @@ pub fn init_base_commands(command_parser: &CommandParser) -> Result<(), CommandP
         .register_namespace("google", Some(1))?
         .register_command("google", "chat", Arc::new(GoogleChatCommand::default()))?;
 
+    command_parser
+        .register_namespace("ai", Some(1))?
+        .register_command("ai", "chat", Arc::new(OpenaiChatCommand::default()))?;
+
+    command_parser
+        .register_namespace("llama", Some(1))?
+        .register_command("llama", "chat", Arc::new(OllamaChatCommand::default()))?;
+
+    command_parser
+        .register_namespace("deep", Some(1))?
+        .register_command("deep", "chat", Arc::new(DeepseekChatCommand::default()))?;
+
+    command_parser
+        .register_namespace("go", Some(1))?
+        .register_command("go", "chat", Arc::new(GoogleChatCommand::default()))?;
+
     Ok(())
 }
 

@@ -2,8 +2,6 @@ use dioxus::prelude::*;
 
 use crate::{services::AVAILABLE_COMMANDS, states::CommandsBoxState};
 
-const CSS: Asset = asset!("/assets/commands_box.css");
-
 #[component]
 pub fn CommandsBoxComponent() -> Element {
     let mut command_box_state = use_context::<CommandsBoxState>();
@@ -41,7 +39,6 @@ pub fn CommandsBoxComponent() -> Element {
     });
 
     rsx! {
-    document::Link { rel: "stylesheet", href: CSS }
      div {
         class: "commands-outer-container",
             p {

@@ -2,7 +2,6 @@ use dioxus::prelude::*;
 
 use crate::states::VoiceState;
 
-const CSS: Asset = asset!("/assets/waveform.css");
 const VISUALIZATION_WIDTH: usize = 100;
 
 #[component]
@@ -57,7 +56,6 @@ pub fn WaveformComponent() -> Element {
     });
 
     rsx! {
-        document::Link { rel: "stylesheet", href: CSS }
         div {
             class: "waveform-container",
 

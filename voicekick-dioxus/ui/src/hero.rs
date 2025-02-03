@@ -1,13 +1,10 @@
 use dioxus::prelude::*;
 
-const CSS: Asset = asset!("/assets/styling/hero.css");
 const HEADER_SVG: Asset = asset!("/assets/header.svg");
 
 #[component]
 pub fn Hero() -> Element {
     rsx! {
-        document::Link { rel: "stylesheet", href: CSS }
-
         div {
             id: "hero",
             img { src: HEADER_SVG, id: "header" }

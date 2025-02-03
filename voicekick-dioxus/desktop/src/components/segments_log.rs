@@ -2,8 +2,6 @@ use dioxus::prelude::*;
 
 use crate::states::VoiceState;
 
-const CSS: Asset = asset!("/assets/whisper.css");
-
 #[component]
 pub fn SegmentsLogComponent() -> Element {
     let voice_state = use_context::<VoiceState>();
@@ -71,7 +69,6 @@ pub fn SegmentsLogComponent() -> Element {
         .collect::<Vec<Element>>();
 
     rsx! {
-        document::Link { rel: "stylesheet", href: CSS}
         div {
             class: "whisper-container",
             div {
