@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
 use dioxus::{
-    hooks::{use_context, use_coroutine_handle, UnboundedReceiver},
+    hooks::{use_context, use_coroutine_handle, Coroutine, UnboundedReceiver},
     signals::{GlobalSignal, Signal, WritableVecExt},
 };
 use futures_util::StreamExt;
+use inference_candle::proto::{DecodingResult, Segment};
 use server::events::{BroadRecvError, Event, EventEmitter, ServerEventsBroadcaster};
 use tracing::{error, info, warn};
 
@@ -24,6 +25,37 @@ use super::VoiceKickCommand;
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ServerCommand {}
+
+fn seed_segments(courinte: &Coroutine<Segment>) {
+    let segmets = vec![
+        Segment {
+            timestamp: None,
+            duration: 0.244,
+            dr: DecodingResult {
+                tokens: vec![],
+                text: "tester me now".to_string(),
+                avg_logprob: 0.23,
+                no_speech_prob: 0.4,
+                temperature: 0.1,
+            },
+        },
+        Segment {
+            timestamp: None,
+            duration: 0.444,
+            dr: DecodingResult {
+                tokens: vec![],
+                text: "test voice log all this goes to file".to_string(),
+                avg_logprob: 0.1,
+                no_speech_prob: 0.4,
+                temperature: 0.0,
+            },
+        },
+    ];
+
+    for segment in segmets {
+        courinte.send(segment);
+    }
+}
 
 pub fn init_base_commands(command_parser: &CommandParser) -> Result<(), CommandParserError> {
     command_parser
@@ -80,6 +112,7 @@ pub async fn server_service(mut rx: UnboundedReceiver<ServerCommand>) {
     let command_parser_state = use_context::<CommandParser>();
     let voice_command_task = use_coroutine_handle::<VoiceKickCommand>();
     let mut voice_config_state = use_context::<VoiceConfigState>();
+    let segment_task = use_coroutine_handle::<Segment>();
 
     let mut server_events_rx = server_events_broadcaster_state.subscribe();
 
@@ -107,6 +140,7 @@ pub async fn server_service(mut rx: UnboundedReceiver<ServerCommand>) {
 
     init_base_commands(&command_parser_state).unwrap();
     update_whisper_commands_boosts();
+    seed_segments(&segment_task);
 
     loop {
         tokio::select! {

@@ -1,9 +1,9 @@
 use dioxus::{
-    hooks::{use_context, use_coroutine_handle, Coroutine, UnboundedReceiver},
+    hooks::{use_context, use_coroutine_handle, UnboundedReceiver},
     signals::{Readable, ReadableVecExt, WritableVecExt},
 };
 use futures_util::StreamExt;
-use inference_candle::proto::{DecodingResult, Segment};
+use inference_candle::proto::Segment;
 use tokio::sync::mpsc::{self};
 use tracing::error;
 
@@ -50,38 +50,6 @@ pub enum VoiceKickCommand {
 
 const MAX_RAW_SAMPLES: usize = 10;
 
-#[cfg(debug_assertions)]
-fn segments_seed(courinte: &Coroutine<Segment>) {
-    let segmets = vec![
-        Segment {
-            timestamp: None,
-            duration: 0.244,
-            dr: DecodingResult {
-                tokens: vec![],
-                text: "tester me now".to_string(),
-                avg_logprob: 0.23,
-                no_speech_prob: 0.4,
-                temperature: 0.1,
-            },
-        },
-        Segment {
-            timestamp: None,
-            duration: 0.444,
-            dr: DecodingResult {
-                tokens: vec![],
-                text: "test voice log all this goes to file".to_string(),
-                avg_logprob: 0.1,
-                no_speech_prob: 0.4,
-                temperature: 0.0,
-            },
-        },
-    ];
-
-    for segment in segmets {
-        courinte.send(segment);
-    }
-}
-
 pub async fn voicekick_service(mut rx: UnboundedReceiver<VoiceKickCommand>) {
     let (samples_tx, mut samples_rx) = mpsc::unbounded_channel::<Vec<f32>>();
     let mut voice_state = use_context::<VoiceState>();
@@ -121,9 +89,6 @@ pub async fn voicekick_service(mut rx: UnboundedReceiver<VoiceKickCommand>) {
     };
 
     let mut whisper = new_whisper();
-
-    #[cfg(debug_assertions)]
-    segments_seed(&segment_task);
 
     loop {
         tokio::select! {
