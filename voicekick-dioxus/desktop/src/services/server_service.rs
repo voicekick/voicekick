@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use dioxus::{
     hooks::{use_context, use_coroutine_handle, UnboundedReceiver},
-    signals::WritableVecExt,
+    signals::{GlobalSignal, Signal, WritableVecExt},
 };
 use futures_util::StreamExt;
 use server::events::{BroadRecvError, Event, EventEmitter, ServerEventsBroadcaster};
@@ -57,6 +57,8 @@ pub fn init_base_commands(command_parser: &CommandParser) -> Result<(), CommandP
     Ok(())
 }
 
+pub static AVAILABLE_COMMANDS: GlobalSignal<Vec<(String, Vec<String>)>> = Signal::global(Vec::new);
+
 pub async fn server_service(mut rx: UnboundedReceiver<ServerCommand>) {
     let server_events_broadcaster_state = use_context::<ServerEventsBroadcaster>();
     let command_parser_state = use_context::<CommandParser>();
@@ -66,9 +68,15 @@ pub async fn server_service(mut rx: UnboundedReceiver<ServerCommand>) {
     let mut server_events_rx = server_events_broadcaster_state.subscribe();
 
     let mut update_whisper_commands_boosts = || {
-        let commands: Vec<String> = command_parser_state
+        let commands: Vec<(String, Vec<String>)> = command_parser_state
             .commands()
             .unwrap_or_default()
+            .clone()
+            .into_iter()
+            .collect();
+
+        let boost_commands: Vec<String> = commands
+            .clone()
             .into_iter()
             .flat_map(|(k, mut v)| {
                 v.push(k);
@@ -76,8 +84,9 @@ pub async fn server_service(mut rx: UnboundedReceiver<ServerCommand>) {
             })
             .collect();
 
-        voice_config_state.command_words.extend(commands);
+        voice_config_state.command_words.extend(boost_commands);
         voice_command_task.send(VoiceKickCommand::UpdateWhisper);
+        *AVAILABLE_COMMANDS.write() = commands.clone();
     };
 
     init_base_commands(&command_parser_state).unwrap();

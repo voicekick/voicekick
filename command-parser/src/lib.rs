@@ -18,17 +18,12 @@ pub enum CommandOutput {
 
 pub type CommandResult = Result<CommandOutput, Box<dyn std::error::Error>>;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[non_exhaustive]
 pub enum CommandArgs {
     Some(String),
+    #[default]
     None,
-}
-
-impl Default for CommandArgs {
-    fn default() -> Self {
-        CommandArgs::None
-    }
 }
 
 #[async_trait]
@@ -87,16 +82,15 @@ impl CommandParser {
             .iter_mut()
             .find(|ns| ns.name == namespace.as_ref())
         {
-            let value = Command {
-                command_parts_count: name.as_ref().split_whitespace().count(),
-                name: name.as_ref().into(),
-                command,
-            };
-
             if let Some(pos) = ns.commands.iter().position(|cmd| cmd.name == name.as_ref()) {
-                ns.commands[pos] = value
+                // Name remains the same but the command can be updated
+                ns.commands[pos].command = command;
             } else {
-                ns.commands.push(value);
+                ns.commands.push(Command {
+                    command_parts_count: name.as_ref().split_whitespace().count(),
+                    name: name.as_ref().into(),
+                    command,
+                });
             }
 
             Ok(self)
