@@ -45,7 +45,7 @@ pub enum VoiceKickCommand {
     Record,
     Pause,
     UpdateVoiceStream,
-    UpdateWhisper,
+    UpdateASR,
 }
 
 const MAX_RAW_SAMPLES: usize = 10;
@@ -110,7 +110,7 @@ pub async fn voicekick_service(mut rx: UnboundedReceiver<VoiceKickCommand>) {
                         )
                         .expect("TODO: fix");
                     }
-                    Some(VoiceKickCommand::UpdateWhisper) => {
+                    Some(VoiceKickCommand::UpdateASR) => {
                         voice_stream.pause().expect("TODO: fix"); // pause the current stream
 
                         whisper = new_whisper();

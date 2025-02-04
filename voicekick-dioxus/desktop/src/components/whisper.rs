@@ -18,7 +18,7 @@ pub fn WhisperComponent() -> Element {
 
         if *voice_config_state.current_model.read() != model {
             voice_config_state.current_model.set(model);
-            voice_command_task.send(VoiceKickCommand::UpdateWhisper);
+            voice_command_task.send(VoiceKickCommand::UpdateASR);
         }
     };
 
@@ -27,7 +27,7 @@ pub fn WhisperComponent() -> Element {
 
         if *voice_config_state.current_language.read() != language {
             voice_config_state.current_language.set(language.clone());
-            voice_command_task.send(VoiceKickCommand::UpdateWhisper);
+            voice_command_task.send(VoiceKickCommand::UpdateASR);
         }
     };
 
@@ -35,7 +35,7 @@ pub fn WhisperComponent() -> Element {
         if let Ok(value) = evt.value().parse::<f64>() {
             if *voice_config_state.temperature.read() != value {
                 voice_config_state.temperature.set(value);
-                voice_command_task.send(VoiceKickCommand::UpdateWhisper);
+                voice_command_task.send(VoiceKickCommand::UpdateASR);
             }
         }
     };
@@ -44,7 +44,7 @@ pub fn WhisperComponent() -> Element {
         if let Ok(value) = evt.value().parse::<f32>() {
             if *voice_config_state.repetition_penalty.read() != value {
                 voice_config_state.repetition_penalty.set(value);
-                voice_command_task.send(VoiceKickCommand::UpdateWhisper);
+                voice_command_task.send(VoiceKickCommand::UpdateASR);
             }
         }
     };
@@ -53,7 +53,7 @@ pub fn WhisperComponent() -> Element {
         if let Ok(value) = evt.value().parse::<usize>() {
             if *voice_config_state.repetition_frequency.read() != value {
                 voice_config_state.repetition_frequency.set(value);
-                voice_command_task.send(VoiceKickCommand::UpdateWhisper);
+                voice_command_task.send(VoiceKickCommand::UpdateASR);
             }
         }
     };
@@ -62,7 +62,7 @@ pub fn WhisperComponent() -> Element {
         if let Ok(value) = evt.value().parse::<f32>() {
             if *voice_config_state.boost_value.read() != value {
                 voice_config_state.boost_value.set(value);
-                voice_command_task.send(VoiceKickCommand::UpdateWhisper);
+                voice_command_task.send(VoiceKickCommand::UpdateASR);
             }
         }
     };
@@ -71,7 +71,7 @@ pub fn WhisperComponent() -> Element {
         if let Ok(value) = evt.value().parse::<f32>() {
             if *voice_config_state.command_boost_value.read() != value {
                 voice_config_state.command_boost_value.set(value);
-                voice_command_task.send(VoiceKickCommand::UpdateWhisper);
+                voice_command_task.send(VoiceKickCommand::UpdateASR);
             }
         }
     };
@@ -80,7 +80,7 @@ pub fn WhisperComponent() -> Element {
         if let Ok(value) = evt.value().parse::<f64>() {
             if *voice_config_state.no_speech_threshold.read() != value {
                 voice_config_state.no_speech_threshold.set(value);
-                voice_command_task.send(VoiceKickCommand::UpdateWhisper);
+                voice_command_task.send(VoiceKickCommand::UpdateASR);
             }
         }
     };
@@ -89,7 +89,7 @@ pub fn WhisperComponent() -> Element {
         if let Ok(value) = evt.value().parse::<f64>() {
             if *voice_config_state.logprob_threshold.read() != value {
                 voice_config_state.logprob_threshold.set(value);
-                voice_command_task.send(VoiceKickCommand::UpdateWhisper);
+                voice_command_task.send(VoiceKickCommand::UpdateASR);
             }
         }
     };
@@ -138,7 +138,7 @@ pub fn WhisperComponent() -> Element {
             class: "input-language-selector",
             label {
                 r#for: "language-select",
-                "Whisper language "
+                "Language "
             }
             select {
                 disabled: !current_model.is_multilingual() || is_disabled,

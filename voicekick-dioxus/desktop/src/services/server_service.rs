@@ -134,7 +134,7 @@ pub async fn server_service(mut rx: UnboundedReceiver<ServerCommand>) {
             .collect();
 
         voice_config_state.command_words.extend(boost_commands);
-        voice_command_task.send(VoiceKickCommand::UpdateWhisper);
+        voice_command_task.send(VoiceKickCommand::UpdateASR);
         *AVAILABLE_COMMANDS.write() = commands.clone();
     };
 
