@@ -70,7 +70,7 @@ pub fn SegmentsLogComponent() -> Element {
 
     rsx! {
         div {
-            class: "whisper-container",
+            class: "transcription-container",
             div {
                 class: "transcription-box",
                 {segments_rendered.into_iter().rev()}
