@@ -46,9 +46,9 @@ fn App() -> Element {
     use_context_provider(|| braodcaster);
 
     // Init services
+    use_coroutine(services::server_service);
     use_coroutine(services::voicekick_service);
     use_coroutine(services::segments_service);
-    use_coroutine(services::server_service);
 
     rsx! {
         // Global app resources
