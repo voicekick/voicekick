@@ -3438,6 +3438,7 @@ checksum = "4ee93343901ab17bd981295f2cf0026d4ad018c7c31ba84549a4ddbb47a45104"
 [[package]]
 name = "llm"
 version = "1.0.4"
+source = "git+https://github.com/voicekick/llm.git?branch=features%2Fconvert_to_async#bf11e65c2a00ff74c933b9f5f552f188abd3e9f3"
 dependencies = [
  "async-trait",
  "reqwest",

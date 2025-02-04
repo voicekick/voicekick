@@ -9,4 +9,4 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.138"
 proto = { path = "../proto" }
-llm = { path = "../../../llm", features = ["openai", "anthropic", "ollama", "deepseek", "google"] }
+llm = { git = "https://github.com/voicekick/llm.git", branch = "features/convert_to_async", features = ["openai", "anthropic", "ollama", "deepseek", "google"] }
