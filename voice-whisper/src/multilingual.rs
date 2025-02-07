@@ -120,9 +120,9 @@ pub(crate) fn detect_language(
     let device = mel.device();
     let language_token_ids = SUPPORTED_LANGUAGES
         .iter()
-        .map(|(t, _)| crate::token_id(tokenizer, &format!("<|{t}|>")))
-        .collect::<InferenceResult<Vec<_>>>()?;
-    let sot_token = crate::token_id(tokenizer, crate::m::SOT_TOKEN)?;
+        .flat_map(|(t, _)| crate::token_id(tokenizer, &format!("<|{t}|>")))
+        .collect::<Vec<_>>();
+    let sot_token = crate::token_id(tokenizer, crate::m::SOT_TOKEN).unwrap();
     let audio_features = model.encoder_forward(&mel, true)?;
     let tokens = Tensor::new(&[[sot_token]], device)?;
     let language_token_ids = Tensor::new(language_token_ids.as_slice(), device)?;
@@ -139,6 +139,5 @@ pub(crate) fn detect_language(
     for ((_, language), p) in probs.iter().take(5) {
         println!("{language}: {p}")
     }
-    let language = crate::token_id(tokenizer, &format!("<|{}|>", probs[0].0 .0))?;
-    Ok(language)
+    Ok(crate::token_id(tokenizer, &format!("<|{}|>", probs[0].0 .0)).unwrap())
 }

@@ -4,13 +4,15 @@ use std::{collections::HashMap, ops::Deref, path::PathBuf};
 use candle_core::{Device, IndexOp, Shape, Tensor};
 use candle_nn::ops::softmax;
 use candle_transformers::models::whisper::{self as m, Config};
+
+pub use hf_hub::api::Progress;
 use hf_hub::{
-    api::sync::{Api, ApiError},
-    Repo, RepoType,
+    api::sync::{ApiBuilder, ApiError, ApiRepo},
+    Cache, CacheRepo, Repo, RepoType,
 };
 use inference_candle::{
     proto::{self, DecodingResult, Segment},
-    InferenceError, InferenceResult, SpeechRecognitionDecoder, SpeechRecognitionModel,
+    InferenceResult, SpeechRecognitionDecoder, SpeechRecognitionModel,
 };
 use tokenizers::Tokenizer;
 use tracing::{debug, error, warn};
@@ -209,35 +211,84 @@ impl Model {
     }
 }
 
-/// Get the model filenames for the selected model.
-pub fn model_filenames(which_model: WhichModel) -> Result<(PathBuf, PathBuf, PathBuf), ApiError> {
+fn _model_filenames(
+    which_model: WhichModel,
+) -> Result<(&'static str, &'static str, &'static str, ApiRepo, CacheRepo), ApiError> {
     let (default_model, default_revision) = which_model.model_and_revision();
 
     let model_id = default_model.to_string();
     let revision = default_revision.to_string();
 
-    let api = Api::new()?;
-    let repo = api.repo(Repo::with_revision(model_id, RepoType::Model, revision));
-    let (config, tokenizer, weights) = match which_model {
+    let cache = Cache::default();
+    let repo = Repo::with_revision(model_id, RepoType::Model, revision);
+    let cache_repo = cache.repo(repo.clone());
+
+    let api = ApiBuilder::from_cache(cache.clone())
+        .with_retries(2)
+        .build()?;
+    let api_repo = api.repo(repo);
+
+    let (config_file, tokenizer_file, weights_file) = match which_model {
         WhichModel::QuantizedTiny => (
-            repo.get("config-tiny.json")?,
-            repo.get("tokenizer-tiny.json")?,
-            repo.get("model-tiny-q80.gguf")?,
+            "config-tiny.json",
+            "tokenizer-tiny.json",
+            "model-tiny-q80.gguf",
         ),
 
         WhichModel::QuantizedTinyEn => (
-            repo.get("config-tiny-en.json")?,
-            repo.get("tokenizer-tiny-en.json")?,
-            repo.get("model-tiny-en-q80.gguf")?,
+            "config-tiny-en.json",
+            "tokenizer-tiny-en.json",
+            "model-tiny-en-q80.gguf",
         ),
-        _ => (
-            repo.get("config.json")?,
-            repo.get("tokenizer.json")?,
-            repo.get("model.safetensors")?,
-        ),
+        _ => ("config.json", "tokenizer.json", "model.safetensors"),
     };
 
+    Ok((
+        config_file,
+        tokenizer_file,
+        weights_file,
+        api_repo,
+        cache_repo,
+    ))
+}
+
+pub fn model_filenames_exist(which_model: WhichModel) -> Result<bool, ApiError> {
+    let (config_file, tokenizer_file, weights_file, _, cache_repo) = _model_filenames(which_model)?;
+
+    Ok(cache_repo.get(config_file).is_some()
+        && cache_repo.get(tokenizer_file).is_some()
+        && cache_repo.get(weights_file).is_some())
+}
+
+/// Get the model filenames for the selected model.
+pub fn model_filenames(which_model: WhichModel) -> Result<(PathBuf, PathBuf, PathBuf), ApiError> {
+    let (config_file, tokenizer_file, weights_file, api_repo, _) = _model_filenames(which_model)?;
+
+    let (config, tokenizer, weights) = (
+        api_repo.get(config_file)?,
+        api_repo.get(tokenizer_file)?,
+        api_repo.get(weights_file)?,
+    );
+
     Ok((config, tokenizer, weights))
+}
+
+/// Get the model filenames for the selected model.
+pub fn download_model_with_progress<P: Progress + Clone>(
+    which_model: WhichModel,
+    progress: P,
+) -> Result<bool, ApiError> {
+    let (config_file, tokenizer_file, weights_file, api_repo, _) = _model_filenames(which_model)?;
+
+    if model_filenames_exist(which_model)? {
+        Ok(false)
+    } else {
+        let _ = api_repo.download_with_progress(config_file, progress.clone())?;
+        let _ = api_repo.download_with_progress(tokenizer_file, progress.clone())?;
+        let _ = api_repo.download_with_progress(weights_file, progress.clone())?;
+
+        Ok(true)
+    }
 }
 
 /// Create a set of token setters for the Whisper model.
@@ -343,12 +394,8 @@ pub struct Whisper {
     logprob_threshold: f64,
 }
 
-pub fn token_id(tokenizer: &Tokenizer, token: &str) -> InferenceResult<u32> {
-    match tokenizer.token_to_id(token) {
-        // TODO: replace panic with bail! ?
-        None => panic!("no token-id for {token}"),
-        Some(id) => Ok::<u32, InferenceError>(id),
-    }
+pub fn token_id(tokenizer: &Tokenizer, token: &str) -> Option<u32> {
+    tokenizer.token_to_id(token)
 }
 
 impl Whisper {
@@ -689,14 +736,9 @@ impl SpeechRecognitionDecoder for Whisper {
                     / audio_params::SAMPLE_RATE as f64,
                 dr,
             };
-            // println!(
-            //     "{:.1}s -- {:.1}s: {}",
-            //     segment.start,
-            //     segment.start + segment.duration,
-            //     segment.dr.text,
-            // );
+            // println!("{:.1}s: {}", segment.duration, segment.dr.text,);
 
-            // println!("{seek}: {segment:?}, in {:?}", start.elapsed());
+            // println!("{seek}: {segment:?}");
             segments.push(segment)
         }
         Ok(segments)

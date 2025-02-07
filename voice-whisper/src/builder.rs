@@ -177,7 +177,7 @@ impl WhisperBuilder {
                 "provided language {lang} is not supported"
             );
 
-            Some(token_id(&tokenizer, &format!("<|{lang}|>"))?)
+            token_id(&tokenizer, &format!("<|{lang}|>"))
         } else {
             None
         };
@@ -312,7 +312,8 @@ impl WhisperBuilder {
     // Build method to create the Whisper instance
     pub fn build(self) -> InferenceResult<Whisper> {
         // Create a new Whisper instance
-        let no_timestamps_token = token_id(&self.tokenizer, m::NO_TIMESTAMPS_TOKEN)?;
+        let no_timestamps_token = token_id(&self.tokenizer, m::NO_TIMESTAMPS_TOKEN)
+            .expect("<|notimestamps|> must be defined");
         // Suppress the notimestamps token when in timestamps mode.
         // https://github.com/openai/whisper/blob/e8622f9afc4eba139bf796c210f5c01081000472/whisper/decoding.py#L452
         let suppress_tokens: Vec<f32> = (0..self.model.config().vocab_size as u32)
@@ -326,12 +327,15 @@ impl WhisperBuilder {
             .collect();
 
         let suppress_tokens = Tensor::new(suppress_tokens.as_slice(), &self.device)?;
-        let sot_token = token_id(&self.tokenizer, m::SOT_TOKEN)?;
-        let transcribe_token = token_id(&self.tokenizer, m::TRANSCRIBE_TOKEN)?;
-        let eot_token = token_id(&self.tokenizer, m::EOT_TOKEN)?;
+        let sot_token =
+            token_id(&self.tokenizer, m::SOT_TOKEN).expect("<|startoftranscript|> must be defined");
+        let transcribe_token =
+            token_id(&self.tokenizer, m::TRANSCRIBE_TOKEN).expect("<|transcribe|> must be defined");
+        let eot_token =
+            token_id(&self.tokenizer, m::EOT_TOKEN).expect("<|endoftext|> must be defined");
         let no_speech_token = m::NO_SPEECH_TOKENS
             .iter()
-            .find_map(|token| token_id(&self.tokenizer, token).ok());
+            .find_map(|token| token_id(&self.tokenizer, token));
 
         let no_speech_token = match no_speech_token {
             // TODO: replace panic with bail! ?
@@ -351,6 +355,8 @@ impl WhisperBuilder {
         );
 
         let space_token = vector_into_tokens(&self.tokenizer, &[" "], None)[0];
+
+        // println!("no_timestamps_token: {} sot_token {} transcribe_token {} eot_token {} space_token {} no_speech_token {}", no_timestamps_token, sot_token, transcribe_token, eot_token, space_token, no_speech_token);
 
         Ok(Whisper {
             device: self.device,
