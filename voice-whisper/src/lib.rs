@@ -412,10 +412,23 @@ impl Whisper {
 
     /// Convert samples into mel spectrogram.
     pub fn pcm_to_mel(&self, pcm: &[f32]) -> InferenceResult<Tensor> {
-        let pcm_len = pcm.len();
+        let min_pcm_length = 16000 * 4; // 4 seconds at 16kHz, LargeV3Turbo workaround
+
+        // Create padded PCM
+        let padded_pcm = if pcm.len() < min_pcm_length {
+            let mut padded = vec![0.0; min_pcm_length];
+            // Center the audio in the padded window
+            let start_idx = (min_pcm_length - pcm.len()) / 2;
+            padded[start_idx..start_idx + pcm.len()].copy_from_slice(pcm);
+            padded
+        } else {
+            pcm.to_vec()
+        };
+
+        let pcm_len = padded_pcm.len();
         let mel = audio::pcm_to_mel(
             &self.config,
-            pcm,
+            &padded_pcm,
             &self.mel_filters,
             self.n_fft,
             self.hop_lengnth,
