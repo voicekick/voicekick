@@ -4,6 +4,7 @@ use symphonia::core::audio::{AudioBufferRef, Signal};
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::conv::FromSample;
 use symphonia_core::codecs::CodecParameters;
+use voice_stream::voice::VoiceDetectionConfig;
 use voice_stream::{voice::VoiceDetection, Resampler};
 
 pub type BoxError = Box<dyn StdError + Send + Sync>;
@@ -91,9 +92,17 @@ pub fn preprocess_samples(
 pub fn new_voice_detection(
     sample_rate: usize,
     chunk_size: usize,
-    siler_voice_threshold: f32,
+    voice_threshold: f32,
 ) -> VoiceDetection {
-    VoiceDetection::new(sample_rate, chunk_size, siler_voice_threshold)
+    let config = VoiceDetectionConfig {
+        silence_duration_threshold: 1000,
+        pre_speech_padding: 200,
+        post_speech_padding: 300,
+        voice_threshold,
+        max_speech_duration: 20_000,
+    };
+
+    VoiceDetection::new(sample_rate, chunk_size, Some(config))
         .expect("Failed to create VoiceDetection")
 }
 

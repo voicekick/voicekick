@@ -1,4 +1,4 @@
-use voice_stream::voice::{VoiceDetection, SILERO_VAD_CHUNK_SIZE};
+use voice_stream::voice::{VoiceDetection, VoiceDetectionConfig, SILERO_VAD_CHUNK_SIZE};
 
 use voice_tests::{
     preprocess_samples, read_voice_dataset_wav_into_samples, read_wav_into_samples,
@@ -7,7 +7,10 @@ use voice_tests::{
 
 #[tokio::test]
 async fn test_silero_vad_predict() {
-    let mut vd = VoiceDetection::default().with_silero_vad_voice_threshold(0.01);
+    let mut config = VoiceDetectionConfig::default();
+    config.voice_threshold = 0.01;
+    let mut vd = VoiceDetection::default();
+    vd.update_config(config);
 
     let (samples, codec_params) = read_voice_dataset_wav_into_samples("Harvard list 01.wav");
 

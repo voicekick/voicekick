@@ -21,17 +21,24 @@ performing voice detection using Silero VAD, and processing audio streams.
 use voice_stream::VoiceStream;
 use voice_stream::cpal::traits::StreamTrait;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create a default voice stream with receiver
-    let (voice_stream, receiver) = VoiceStream::default_device().unwrap();
+    let (voice_stream, mut rx) = VoiceStream::default_device().unwrap();
 
     // Start capturing audio
     voice_stream.play().unwrap();
 
     // Receive voice data chunks
-    for voice_data in receiver {
-        // Process voice data (Vec<f32>)
-        println!("Received voice data chunk of size: {}", voice_data.len());
+    loop {
+        match rx.recv().await {
+            Some(samples) => {
+              // Process voice data (Vec<f32>)
+              println!("Received voice data chunk of size: {}", samples.len());
+            }
+            _ => {}
+        }
+
     }
 
     Ok(())
@@ -123,8 +130,9 @@ The library provides a builder pattern for advanced configuration:
 ```rust,no_run
 use voice_stream::VoiceStreamBuilder;
 use voice_stream::cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use tokio::sync::mpsc;
 
-let (tx, rx) = std::sync::mpsc::channel();
+let (tx, mut rx) = mpsc::unbounded_channel();
 
 let host = cpal::default_host();
 
