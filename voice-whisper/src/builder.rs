@@ -91,17 +91,7 @@ impl WhisperBuilder {
             Some(WithSpace::Before)
         );
 
-        #[rustfmt::skip]
-        let command_tokens = vector_into_tokens(
-            &tokenizer,
-            &[
-                "on", "off", "yes", "no",
-                "forward", "backward", "leftward", "rightward",
-                "up", "down", "left", "right",
-                "start", "stop", "follow", "go", "halt",
-            ],
-            Some(WithSpace::Before),
-        );
+        let command_tokens = vec![];
 
         #[rustfmt::skip]
         let mut penalty_tokens = vector_into_tokens(
