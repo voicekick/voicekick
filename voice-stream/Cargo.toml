@@ -19,9 +19,9 @@ linux = ["cpal/jack"]
 [dependencies]
 cpal = { version = "0.15", default-features = false, features = [] }
 rubato = { version = "0.16", default-features = false, features = ["fft_resampler"] }
-tracing = { workspace = true }
 voice_activity_detector = "0.1"
 tokio = { version = "1", features = ["sync"] }
+tracing.workspace = true
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util"] }
