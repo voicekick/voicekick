@@ -62,10 +62,10 @@ async fn test_whisper_voice_dataset_harvard_list_01() {
     .collect::<Vec<&str>>()
     .join(" ");
 
-    let models = vec![WhichModel::BaseEn];
+    let models = vec![WhichModel::BaseEn, WhichModel::LargeV3Turbo];
 
     for model in models {
-        let mut whisper = voice_whisper::WhisperBuilder::infer(model, None)
+        let mut whisper = voice_whisper::WhisperBuilder::infer(model, Some("en"))
             .unwrap()
             .add_boost_words(&["was"], Some(voice_whisper::WithSpace::Before))
             .build()

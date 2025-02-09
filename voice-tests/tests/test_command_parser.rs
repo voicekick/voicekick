@@ -45,14 +45,14 @@ async fn test_command_parser() {
     // 176000 / 512 = 343
 
     resampled_samples = resampled_samples
-        .chunks(512)
+        .chunks(128)
         .skip(50)
-        .take(100)
+        .take(150)
         .flatten()
         .cloned()
         .collect();
 
-    let expected = "americans ask not"
+    let expected = "and so my fellow"
         .split_whitespace()
         .collect::<Vec<&str>>()
         .join(" ");

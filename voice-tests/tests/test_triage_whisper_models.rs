@@ -73,18 +73,18 @@ async fn test_voice_commands_whisper_model(
     model: WhichModel,
 ) -> (WhichModel, BTreeMap<String, usize>) {
     let expectations = speech_commands_expectations(Some(3));
-    let total_expectations = expectations.values().into_iter().flatten().count();
+    let total_expectations = expectations.values().flatten().count();
 
     println!("Total expectations: {}", total_expectations);
 
     // let temperatures = vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
-    let temperatures = vec![0.0];
+    let temperatures = [0.0];
 
     let mut matches: BTreeMap<String, usize> = BTreeMap::new();
 
     for (expectation, files) in expectations.iter() {
         for temperature in temperatures.iter() {
-            let mut whisper = voice_whisper::WhisperBuilder::infer(model, None)
+            let mut whisper = voice_whisper::WhisperBuilder::infer(model, Some("en"))
                 .unwrap()
                 .temperatures(vec![*temperature])
                 .build()
@@ -144,6 +144,7 @@ async fn test_triage_voice_commands_whisper_english_models() {
         test_voice_commands_whisper_model(WhichModel::BaseEn),
         test_voice_commands_whisper_model(WhichModel::SmallEn),
         test_voice_commands_whisper_model(WhichModel::MediumEn),
+        test_voice_commands_whisper_model(WhichModel::LargeV3Turbo),
     ];
 
     println!("{:#?}", triage_models);
