@@ -21,6 +21,7 @@ members = [
 
 exclude = [
     "voicekick-dioxus",
+    "voice-stream",
 ]
 
 resolver = "2"
