@@ -26,6 +26,7 @@ use super::VoiceKickCommand;
 #[non_exhaustive]
 pub enum ServerCommand {}
 
+#[cfg(debug_assertions)]
 fn seed_segments(courinte: &Coroutine<Segment>) {
     let segmets = vec![
         Segment {
@@ -58,41 +59,22 @@ fn seed_segments(courinte: &Coroutine<Segment>) {
 }
 
 pub fn init_base_commands(command_parser: &CommandParser) -> Result<(), CommandParserError> {
+    #[cfg(debug_assertions)]
     command_parser
         .register_namespace("test", Some(1))?
         .register_command("test", "voice log", Arc::new(VoiceLogCommand))?;
 
     command_parser
-        .register_namespace("anthropic", Some(1))?
-        .register_command(
-            "anthropic",
-            "chat",
-            Arc::new(AnthropicChatCommand::default()),
-        )?;
-
-    command_parser
-        .register_namespace("openai", Some(1))?
-        .register_command("openai", "chat", Arc::new(OpenaiChatCommand::default()))?;
-
-    command_parser
-        .register_namespace("ollama", Some(1))?
-        .register_command("ollama", "chat", Arc::new(OllamaChatCommand::default()))?;
-
-    command_parser
-        .register_namespace("deepseek", Some(1))?
-        .register_command("deepseek", "chat", Arc::new(DeepseekChatCommand::default()))?;
-
-    command_parser
-        .register_namespace("google", Some(1))?
-        .register_command("google", "chat", Arc::new(GoogleChatCommand::default()))?;
+        .register_namespace("tropic", Some(1))?
+        .register_command("tropic", "chat", Arc::new(AnthropicChatCommand::default()))?;
 
     command_parser
         .register_namespace("ai", Some(1))?
         .register_command("ai", "chat", Arc::new(OpenaiChatCommand::default()))?;
 
     command_parser
-        .register_namespace("llama", Some(1))?
-        .register_command("llama", "chat", Arc::new(OllamaChatCommand::default()))?;
+        .register_namespace("local", Some(1))?
+        .register_command("local", "chat", Arc::new(OllamaChatCommand::default()))?;
 
     command_parser
         .register_namespace("deep", Some(1))?
@@ -139,6 +121,7 @@ pub async fn server_service(mut rx: UnboundedReceiver<ServerCommand>) {
 
     init_base_commands(&command_parser_state).unwrap();
     update_whisper_commands_boosts();
+    #[cfg(debug_assertions)]
     seed_segments(&segment_task);
 
     loop {
