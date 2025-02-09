@@ -3437,8 +3437,9 @@ checksum = "4ee93343901ab17bd981295f2cf0026d4ad018c7c31ba84549a4ddbb47a45104"
 
 [[package]]
 name = "llm"
-version = "1.0.4"
-source = "git+https://github.com/voicekick/llm.git?branch=features%2Fconvert_to_async#bf11e65c2a00ff74c933b9f5f552f188abd3e9f3"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a2b5f53525170466dec4fd96028f47ea556e27d720b833815daa8c07bafddda"
 dependencies = [
  "async-trait",
  "reqwest",
@@ -6577,7 +6578,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "voice-stream"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "cpal",
  "rubato",
