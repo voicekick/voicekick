@@ -51,16 +51,12 @@ impl SoundStream {
                 let resampled = self.resampler.process(chunk);
 
                 for voice_chunk in resampled.chunks(self.buffer_size) {
-                    if let Some(detected_voice) =
-                        self.voice_detection.add_samples(voice_chunk.to_vec())
-                    {
+                    if let Some(detected_voice) = self.voice_detection.add_samples(voice_chunk) {
                         if let Err(e) = sender.send(detected_voice) {
                             eprintln!("Failed to send voice data: {:?}", e);
                         }
-                    } else {
-                        if let Err(e) = sender.send(vec![]) {
-                            eprintln!("Failed to send voice data: {:?}", e);
-                        }
+                    } else if let Err(e) = sender.send(vec![]) {
+                        eprintln!("Failed to send voice data: {:?}", e);
                     }
                 }
             }
@@ -79,14 +75,12 @@ impl SoundStream {
                 while self.output_buffer.len() >= self.buffer_size {
                     let voice_chunk: Vec<_> =
                         self.output_buffer.drain(..self.buffer_size).collect();
-                    if let Some(detected_voice) = self.voice_detection.add_samples(voice_chunk) {
+                    if let Some(detected_voice) = self.voice_detection.add_samples(&voice_chunk) {
                         if let Err(e) = sender.send(detected_voice) {
                             eprintln!("Failed to send voice data: {:?}", e);
                         }
-                    } else {
-                        if let Err(e) = sender.send(vec![]) {
-                            eprintln!("Failed to send voice data: {:?}", e);
-                        }
+                    } else if let Err(e) = sender.send(vec![]) {
+                        eprintln!("Failed to send voice data: {:?}", e);
                     }
                 }
             }

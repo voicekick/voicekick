@@ -10,7 +10,7 @@ use cpal::{
 use std::time::Duration;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use traits::IntoF32;
-use voice::{VoiceDetection, SILERO_VAD_VOICE_THRESHOLD};
+use voice::{VoiceDetection, VoiceDetectionConfig, SILERO_VAD_VOICE_THRESHOLD};
 
 use std::error::Error as StdError;
 
@@ -145,10 +145,18 @@ impl VoiceStreamBuilder {
     pub fn build(self) -> Result<VoiceStream, VoiceInputError> {
         let outgoing_sample_rate = SAMPLE_RATE;
 
+        let config = VoiceDetectionConfig {
+            silence_duration_threshold: 1000,
+            pre_speech_padding: 200,
+            post_speech_padding: 300,
+            voice_threshold: self.voice_detection_silero_threshold,
+            max_speech_duration: 20_000,
+        };
+
         let voice_detection = VoiceDetection::new(
             outgoing_sample_rate,
             self.sound_stream_samples_buffer_size,
-            self.voice_detection_silero_threshold,
+            Some(config),
         )?;
 
         let sound_stream = SoundStream::new(
