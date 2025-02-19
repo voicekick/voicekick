@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>CFBundleDisplayName</key>
+    <string>VoiceKick</string>
+    <key>CFBundleExecutable</key>
+    <string>desktop</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.voicekick.desktop1</string>
+    <key>CFBundleName</key>
+    <string>VoiceKick</string>
+    <key>CFBundleIconFile</key>
+    <string>icon.icns</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>7.4.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>10.7</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>This app requires microphone access to record and process audio.</string>
+    <!-- <key>NSScreenCaptureUsageDescription</key> -->
+    <!-- <string>This app requires screen capture access to record the screen.</string> -->
+    <!-- <key>CGRequestScreenCaptureAccess</key> -->
+    <!-- <string>This app requires screen capture access to record the screen.</string> -->
+    <key>NSSystemExtensionUsageDescription</key>
+    <string>This app requires system extension access to capture audio output.</string>
+    <!-- Entitlements -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+  </dict>
+</plist>

@@ -8,12 +8,11 @@ You are provided with a `ui` crate for shared UI and if you chose to use fullsta
 
 Navigate to the platform crate of your choice:
 ```bash
-cd web
+cd desktop
 ```
 
 and serve:
 
 ```bash
-dx serve
+make serve
 ```
-

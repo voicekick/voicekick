@@ -5,3 +5,26 @@ name = "VoiceKick"
 [web.app]
 # HTML title tag content
 title = "VoiceKick"
+
+[desktop.app]
+# HTML title tag content
+name = "VoiceKick"
+title = "VoiceKick"
+
+# Optional: Bundle creation
+[bundle]
+name = "VoiceKick"
+identifier = "com.voicekick.desktop1"
+icon = ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png"]
+version = "1.0.0"
+copyright = "Copyright (c) Ernestas Poskus 2025. All rights reserved."
+category = "public.app-category.productivity"
+short_description = "VoiceKick is a voice recognition app that helps you to control your device with your voice."
+
+[bundle.macos]
+minimum_system_version = "10.7"
+# entitlements = "entitlements.plist"
+# info_plist_path = "Info.plist"
+# TODO: handlebars does not support custom Info.plist code and files overrides does not work https://github.com/search?q=repo%3ADioxusLabs%2Fdioxus%20plist&type=code
+files = {}  # Key should be the path inside the bundle
+hardened_runtime = true
