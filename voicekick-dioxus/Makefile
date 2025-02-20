@@ -8,3 +8,7 @@ build:
 	cp Info.plist ../voicekick-dioxus/target/dx/desktop/release/macos/Desktop.app/Contents/Info.plist
 	rm -rf ../voicekick-dioxus/target/dx/desktop/release/macos/Voicekick.app
 	mv ../voicekick-dioxus/target/dx/desktop/release/macos/Desktop.app ../voicekick-dioxus/target/dx/desktop/release/macos/Voicekick.app
+
+.PHONE: setup
+setup:
+	cargo install dioxus-cli
